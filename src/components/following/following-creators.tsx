@@ -59,14 +59,14 @@ export function FollowingCreators() {
   }
 
   return (
-    <section className="h-full overflow-y-auto px-4 pb-24 pt-6">
+    <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8">
       <div className="mx-auto max-w-[760px]">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
-            <h1 className={cx("text-2xl font-black", isDark ? "text-white" : "text-zinc-950")}>Following</h1>
-            <p className={cx("mt-1 text-sm font-semibold", isDark ? "text-violet-100/52" : "text-zinc-500")}>Discover creators and build your feed.</p>
+            <h1 className={cx("text-2xl font-semibold tracking-tight", isDark ? "text-white" : "text-zinc-950")}>Following</h1>
+            <p className={cx("mt-2 text-sm", isDark ? "text-violet-100/52" : "text-zinc-500")}>Discover creators and build your feed.</p>
           </div>
-          <Link href="/feed?tab=following" className={cx("hidden rounded-md px-4 py-2 text-sm font-bold ring-1 transition sm:inline-flex", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-white text-zinc-950 ring-zinc-200 shadow-sm hover:bg-zinc-50")}>
+          <Link href="/feed?tab=following" className={cx("inline-flex shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition", isDark ? "bg-[var(--surface)] text-white hover:bg-[var(--surface-hover)]" : "bg-[var(--surface)] text-zinc-700 hover:bg-[var(--surface-hover)]")}>
             Following feed
           </Link>
         </div>
@@ -85,7 +85,7 @@ export function FollowingCreators() {
               const followed = followingIds.includes(creator.id);
 
               return (
-                <article key={creator.id} className="group relative isolate aspect-[3/4] overflow-hidden rounded-lg bg-violet-950/70 shadow-lg ring-1 ring-violet-200/10">
+                <article key={creator.id} className="group relative isolate aspect-[3/4] overflow-hidden rounded-xl bg-[var(--surface)]">
                   <Link
                     href={`/profile/${creator.username}`}
                     className="absolute inset-0 z-10"
@@ -101,7 +101,7 @@ export function FollowingCreators() {
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.12)_38%,rgba(0,0,0,0.78))]" />
                   <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 flex flex-col items-center text-center">
                     <UserAvatar src={creator.avatar} size={56} className="mb-3 h-14 w-14 ring-2 ring-white/70" />
-                    <p className="max-w-full truncate text-lg font-black text-white">
+                    <p className="max-w-full truncate text-lg font-semibold text-white">
                       {creator.name || creator.username}
                     </p>
                     <div className="mt-0.5 flex max-w-full items-center justify-center gap-1 text-sm font-semibold text-white/86">
@@ -113,7 +113,7 @@ export function FollowingCreators() {
                       type="button"
                       onClick={() => void followCreator(creator)}
                       disabled={!authenticated || followed}
-                      className="pointer-events-auto mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] px-4 text-sm font-black text-white shadow-[0_0_22px_rgba(139,92,246,0.34)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/18 disabled:text-white/70 disabled:shadow-none"
+                      className="pointer-events-auto mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#7545e8] px-4 text-sm font-black text-white  transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/18 disabled:text-white/70 disabled:shadow-none"
                     >
                       {followed ? (
                         <>

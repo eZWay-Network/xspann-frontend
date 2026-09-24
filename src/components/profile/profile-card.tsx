@@ -306,14 +306,14 @@ export function ProfileCard({ username }: { username: string }) {
     : "border-pink-200 bg-pink-50 text-pink-700";
 
   return (
-    <section className={cx("h-full overflow-y-auto px-4 pb-24 pt-6", isDark ? "text-white" : "text-zinc-950")}>
+    <section className={cx("page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8", isDark ? "text-white" : "text-zinc-950")}>
       <div className="mx-auto max-w-5xl">
         <div className={cx("mb-6 rounded-lg border p-6 transition-colors duration-200", isDark ? "border-violet-200/10 bg-[#090313]/92" : "border-violet-200 bg-white")}>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <UserAvatar src={profile.avatar} size={96} className="h-24 w-24 ring-2 ring-violet-300/60" />
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex items-center gap-2">
-                <h1 className={cx("text-2xl font-black", isDark ? "text-white" : "text-zinc-950")}>
+                <h1 className={cx("text-2xl font-semibold tracking-tight", isDark ? "text-white" : "text-zinc-950")}>
                   @{profile.username}
                 </h1>
                 {profile.verified && (
@@ -631,7 +631,7 @@ export function ProfileCard({ username }: { username: string }) {
                 <button
                   type="submit"
                   disabled={editSaving || avatarUploading || !editDraft.username.trim()}
-                  className="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-md bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(91,33,182,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-10 min-w-24 items-center justify-center gap-2 rounded-md bg-[#7545e8] px-5 text-sm font-bold text-white  transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {editSaving && <LoaderCircle className="animate-spin" size={16} />}
                   Save

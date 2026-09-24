@@ -79,15 +79,15 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
   return (
     <main
       className={cx(
-        "grid min-h-screen place-items-center px-4 py-10",
+        "grid min-h-dvh place-items-center bg-[var(--background)] px-5 py-10",
         isDark ? "text-white" : "text-zinc-950",
       )}
     >
-      <section className="glass-panel w-full max-w-md rounded-xl p-6">
+      <section className="glass-panel w-full max-w-md rounded-2xl p-7 sm:p-9">
         <div className="mb-7">
           <Logo />
         </div>
-        <h1 className="mb-2 text-2xl font-black">{title}</h1>
+        <h1 className="mb-2 text-2xl font-semibold tracking-tight">{title}</h1>
         <p
           className={cx(
             "mb-6 text-sm",
@@ -173,7 +173,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
           )}
           <button
             disabled={submitting}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] font-bold text-white shadow-[0_0_32px_rgba(139,92,246,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#7545e8] font-bold text-white  transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65"
           >
             {submitting && <LoaderCircle size={18} className="animate-spin" />}
             {submitting ? "Please wait" : submitLabel}

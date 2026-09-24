@@ -2,7 +2,6 @@
 
 import { CommentsPanel } from "@/components/comments/comments-panel";
 import { useAuth } from "@/components/common/auth-provider";
-import { useTheme } from "@/components/common/theme-provider";
 import { ActionRail } from "@/components/video/action-rail";
 import { cx } from "@/lib/format";
 import { videos } from "@/lib/mock-data";
@@ -14,6 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   Music,
+  MapPin,
+  Search,
   Pause,
   Play,
   Volume2,
@@ -39,13 +40,10 @@ const emptyVideos: Video[] = [];
 
 export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) {
   const { loading: authLoading, token } = useAuth();
-  const { theme } = useTheme();
-  const [themeReady, setThemeReady] = useState(false);
-  const isDark = !themeReady || theme === "dark";
   const searchParams = useSearchParams();
   const feedTab = searchParams.get("tab");
   const [paused, setPaused] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<number | null>(null);
   const [viewCountsByVideoId, setViewCountsByVideoId] = useState<Record<number, number>>({});
@@ -54,12 +52,6 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const viewedVideoIdsRef = useRef<Set<number>>(new Set());
   const authScope = token ? "auth" : "guest";
   const feedScope = feedTab === "following" ? "following" : "for-you";
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setThemeReady(true));
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
 
   const feedQuery = useQuery({
     enabled: !authLoading,
@@ -105,7 +97,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       following: followingByUserId[video.user.id] ?? video.viewer.following,
     },
   })), [baseFeedVideos, followingByUserId, viewCountsByVideoId]);
-  const effectiveActiveVideoId = activeVideoId ?? feedVideos[0]?.id ?? null;
+  const effectiveActiveVideoId = feedVideos.some((video) => video.id === activeVideoId) ? activeVideoId : feedVideos[0]?.id ?? null;
 
   useEffect(() => {
     if (!effectiveActiveVideoId || viewedVideoIdsRef.current.has(effectiveActiveVideoId)) return undefined;
@@ -175,7 +167,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
     if (!nextVideo || nextVideo.id === effectiveActiveVideoId) return;
 
     feed.querySelector<HTMLElement>(`[data-video-id="${nextVideo.id}"]`)?.scrollIntoView({
-      behavior: "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
       block: "start",
     });
     setActiveVideoId(nextVideo.id);
@@ -183,8 +175,9 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.defaultPrevented || commentsOpen || document.querySelector('[role="dialog"]')) return;
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"], [role="slider"]')) return;
 
       event.preventDefault();
       scrollToVideo(event.key === "ArrowUp" ? "previous" : "next");
@@ -192,32 +185,40 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [scrollToVideo]);
+  }, [commentsOpen, scrollToVideo]);
 
   return (
-    <div className={cx("relative h-screen transition-colors duration-200", isDark ? "bg-transparent" : "bg-white")}>
-      <section
-        ref={feedRef}
-        className="no-scrollbar h-screen snap-y snap-mandatory overflow-y-auto"
-      >
-        {feedQuery.isLoading && !feedVideos.length && (
-          <div className={cx("grid h-screen place-items-center text-sm font-semibold", isDark ? "bg-black text-violet-50/70" : "bg-white text-zinc-500")}>
+    <div className="feed-layout relative bg-[var(--background)]">
+      <header className="feed-header relative flex items-center justify-center md:justify-start md:px-8">
+        <Link href="/search" aria-label="Search videos" className="icon-button absolute left-3 md:hidden"><Search size={21} strokeWidth={1.8} /></Link>
+        <nav aria-label="Feed" className="flex h-full items-center gap-7">
+          {[{ label: "For You", href: "/feed", active: feedTab !== "following" }, { label: "Following", href: "/feed?tab=following", active: feedTab === "following" }].map((tab) => (
+            <Link key={tab.label} href={tab.href} aria-current={tab.active ? "page" : undefined} className={cx("relative flex h-full items-center text-sm transition", tab.active ? "font-semibold text-[var(--foreground)] after:absolute after:bottom-3 after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-full after:bg-[var(--royal)]" : "font-medium text-[var(--muted)] hover:text-[var(--foreground)]")}>
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
+      <section ref={feedRef} aria-label="Short videos" className="feed-scroller no-scrollbar snap-y snap-mandatory overflow-y-auto">
+        {feedQuery.isPending && !feedVideos.length && (
+          <div role="status" className="grid h-full place-items-center text-sm text-[var(--muted)]">
             Loading videos...
           </div>
         )}
 
-        {(!feedQuery.isLoading || Boolean(feedVideos.length)) &&
+        {(!feedQuery.isPending || Boolean(feedVideos.length)) &&
           feedVideos.map((video, index) => (
             <article
               key={video.id}
               data-video-id={video.id}
-              className={cx("relative flex h-screen snap-start items-center justify-center px-2 pb-16 pt-3 transition-colors duration-200 md:px-8 md:pb-5 md:pt-3", isDark ? "bg-black" : "bg-white")}
+              className="feed-item relative flex snap-start items-center justify-center sm:px-6 sm:pb-4 sm:pt-1"
             >
-              <div className="flex h-full w-full items-end justify-center gap-4 lg:gap-5">
-                <div className="relative h-full max-h-[calc(100vh-24px)] w-full max-w-[min(56.25vh,526px)] overflow-hidden rounded-[16px] bg-[#0b0614] shadow-[0_0_70px_rgba(91,33,182,0.28)] ring-1 ring-violet-200/14">
+              <div className="feed-stage">
+                <div className="feed-presentation">
+                <div className="video-frame">
                   <VideoPlayer
                     video={video}
-                    paused={paused}
+                    paused={paused || commentsOpen}
                     muted={muted}
                     isActive={video.id === effectiveActiveVideoId}
                     priority={video.id === feedVideos[0]?.id}
@@ -227,29 +228,27 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                   />
                   <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.03),rgba(0,0,0,0.04)_48%,rgba(0,0,0,0.66))]" />
 
-                  <div className="absolute bottom-16 left-0 right-0 z-20 p-4 text-white sm:p-5">
+                  <div className="pointer-events-none absolute bottom-14 left-0 right-16 z-20 p-4 text-white sm:right-0 sm:p-5 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
                     {video.location_name && (
-                      <div className="mb-2 inline-flex items-center gap-2 rounded bg-black/28 px-2 py-1 text-xs font-semibold backdrop-blur-sm">
-                        <span className="grid h-4 w-4 place-items-center rounded-sm bg-emerald-500 text-[10px]">
-                          ✓
-                        </span>
+                      <div className="mb-2 flex w-fit items-center gap-1.5 rounded-md bg-black/28 px-2 py-1 text-xs font-semibold backdrop-blur-sm">
+                        <MapPin size={12} strokeWidth={2} />
                         {video.location_name}
                       </div>
                     )}
                     <Link
                       href={`/profile/${video.user.username}`}
-                      className="mb-2 inline-flex max-w-full text-lg font-bold leading-tight transition hover:text-violet-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                      className="mb-1.5 inline-flex max-w-full text-[15px] font-semibold leading-tight transition hover:text-violet-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                     >
                       @{video.user.username}
                     </Link>
                     <ExpandableCaption caption={video.caption} />
-                    <p className="mt-1 line-clamp-1 text-[15px] font-semibold text-white">
+                    <p className="mt-1 line-clamp-1 text-sm font-medium text-white">
                       {video.tags
                         .map((tag) => `#${tag.replace("#", "")}`)
                         .join(" ")}
                     </p>
-                    <div className="mt-2 flex items-center gap-2 text-sm text-white/88">
-                      <Music size={15} /> {video.music}
+                    <div className="mt-2.5 flex items-center gap-2 text-xs text-white/75">
+                      <Music size={13} className="shrink-0" /> <span className="truncate">{video.music}</span>
                     </div>
                   </div>
                 </div>
@@ -263,29 +262,30 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                   }}
                   onFollowChange={updateCreatorFollowState}
                 />
+                </div>
               </div>
             </article>
           ))}
       </section>
 
-      <div className="fixed right-6 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-4 xl:flex">
+      <div className="fixed right-7 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center gap-3 xl:flex">
         <button
           type="button"
           onClick={() => scrollToVideo("previous")}
           disabled={!canGoPrevious}
-          className={cx("grid h-12 w-12 place-items-center rounded-full ring-1 transition disabled:cursor-not-allowed disabled:opacity-35", isDark ? "bg-violet-950/70 text-violet-50 ring-violet-200/12 hover:bg-violet-800/80" : "bg-zinc-100 text-zinc-950 ring-zinc-200 hover:bg-zinc-200")}
+          className="grid h-11 w-11 place-items-center rounded-full bg-[var(--surface)] text-[var(--foreground)] transition hover:bg-[var(--surface-hover)] disabled:cursor-default disabled:opacity-30"
           aria-label="Previous video"
         >
-          <ChevronUp size={26} />
+          <ChevronUp size={22} strokeWidth={1.8} />
         </button>
         <button
           type="button"
           onClick={() => scrollToVideo("next")}
           disabled={!canGoNext}
-          className={cx("grid h-12 w-12 place-items-center rounded-full ring-1 transition disabled:cursor-not-allowed disabled:opacity-35", isDark ? "bg-violet-950/70 text-violet-50 ring-violet-200/12 hover:bg-violet-800/80" : "bg-zinc-100 text-zinc-950 ring-zinc-200 hover:bg-zinc-200")}
+          className="grid h-11 w-11 place-items-center rounded-full bg-[var(--surface)] text-[var(--foreground)] transition hover:bg-[var(--surface-hover)] disabled:cursor-default disabled:opacity-30"
           aria-label="Next video"
         >
-          <ChevronDown size={26} />
+          <ChevronDown size={22} strokeWidth={1.8} />
         </button>
       </div>
 
@@ -309,13 +309,14 @@ function ExpandableCaption({ caption }: { caption: string | null }) {
   const shouldClamp = text.length > 92;
 
   return (
-    <div className="max-w-[88%] text-[15px] leading-5 text-white/92">
+    <div className="text-sm leading-[1.5] text-white/90">
       <p className={expanded || !shouldClamp ? "" : "line-clamp-2"}>{text}</p>
       {shouldClamp && (
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="mt-1 text-sm font-bold text-white transition hover:text-violet-100"
+          aria-expanded={expanded}
+          className="mt-1 text-xs font-semibold text-white transition hover:text-violet-100"
         >
           {expanded ? "See less" : "See more"}
         </button>
@@ -658,7 +659,7 @@ function VideoPlayer({
         >
           <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/22">
             <div
-              className="h-full origin-left rounded-full bg-[linear-gradient(90deg,var(--royal),var(--royal-bright))] transition-transform duration-100"
+              className="h-full origin-left rounded-full bg-white transition-transform duration-100"
               style={{ transform: `scaleX(${progress})` }}
             />
           </div>

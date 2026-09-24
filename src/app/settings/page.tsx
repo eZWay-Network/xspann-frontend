@@ -99,24 +99,24 @@ function SettingsContent() {
   }
 
   return (
-    <section className={cx("h-full overflow-y-auto px-4 py-6", isDark ? "text-white" : "text-zinc-950")}>
+    <section className={cx("page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8", isDark ? "text-white" : "text-zinc-950")}>
       <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[356px_1fr]">
         <aside className={cx("rounded-lg border p-4", panelClass)}>
           <SettingsNavItem active icon={UserRound} label="Manage account" isDark={isDark} />
           <SettingsNavItem icon={ShieldCheck} label="Security" isDark={isDark} />
         </aside>
 
-        <div className={cx("rounded-lg border px-6 py-7 shadow-sm", panelClass)}>
-          <h1 className="text-2xl font-black">Manage account</h1>
+        <div className={cx("rounded-lg border px-6 py-7", panelClass)}>
+          <h1 className="text-2xl font-semibold tracking-tight">Manage account</h1>
 
           <section className={cx("mt-7 border-b pb-6", rowBorderClass)}>
-            <h2 className="mb-4 text-lg font-black">Account information</h2>
+            <h2 className="mb-4 text-lg font-semibold">Account information</h2>
             <InfoRow label="Username" value={`@${user?.username ?? "unknown"}`} mutedClass={mutedClass} />
             <InfoRow label="Email" value={user?.email ?? "No email"} mutedClass={mutedClass} />
           </section>
 
           <section className={cx("border-b py-6", rowBorderClass)}>
-            <h2 className="mb-4 text-lg font-black">Email verification</h2>
+            <h2 className="mb-4 text-lg font-semibold">Email verification</h2>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-bold">{user?.email_verified_at ? "Verified email" : "Verify your email"}</p>
@@ -139,7 +139,7 @@ function SettingsContent() {
           </section>
 
           <section className={cx("border-b py-6", rowBorderClass)}>
-            <h2 className="mb-4 text-lg font-black">Password recovery</h2>
+            <h2 className="mb-4 text-lg font-semibold">Password recovery</h2>
             <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleForgotPassword}>
               <label className="block">
                 <span className={cx("mb-2 block text-sm font-bold", mutedClass)}>Recovery email</span>
@@ -162,7 +162,7 @@ function SettingsContent() {
           </section>
 
           <section className="py-6">
-            <h2 className="mb-4 text-lg font-black">Change password</h2>
+            <h2 className="mb-4 text-lg font-semibold">Change password</h2>
             <form className="grid gap-4" onSubmit={handleChangePassword}>
               {[
                 ["current_password", "Current password"],

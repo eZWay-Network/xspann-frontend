@@ -17,7 +17,7 @@ export function UserAvatar({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const avatarClassName = cx(
-    "grid shrink-0 place-items-center overflow-hidden rounded-full bg-violet-950 text-violet-100 ring-1 ring-violet-200/25",
+    "grid shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--surface)] text-[var(--muted)]",
     className,
   );
 

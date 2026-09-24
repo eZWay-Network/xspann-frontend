@@ -36,12 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className={cx(
-      "min-h-screen overflow-hidden transition-colors duration-200",
-      isDark
-        ? "bg-[radial-gradient(circle_at_24%_10%,rgba(91,33,182,0.34),transparent_26%),radial-gradient(circle_at_76%_18%,rgba(168,85,247,0.18),transparent_24%),linear-gradient(135deg,#05010a,#10051f_44%,#07020f)] text-white"
-        : "bg-white text-zinc-950",
-    )}>
+    <div className="h-dvh overflow-hidden bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
       <MobileMenu
         authenticated={authenticated}
@@ -51,23 +46,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         profileHref={authenticated && user ? `/profile/${user.username}` : "/login"}
         setTheme={setTheme}
       />
-      <div className="fixed right-5 top-4 z-30 hidden lg:block">
+      <div className="fixed right-6 top-3.5 z-30 hidden md:block">
         {!loading && authenticated && user ? (
           <div className="flex items-center gap-2">
-            <Link href={`/profile/${user.username}`} className={cx("inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-bold backdrop-blur-xl transition", isDark ? "border-violet-200/14 bg-violet-950/55 text-white hover:bg-violet-800/55" : "border-violet-200 bg-white/82 text-zinc-950 shadow-sm hover:bg-violet-50")}>
+            <Link href={`/profile/${user.username}`} className="inline-flex h-10 max-w-44 items-center gap-2 rounded-full bg-[var(--surface)] px-4 text-sm font-medium">
               <UserRound size={16} /> @{user.username}
             </Link>
-            <button type="button" onClick={() => void logout()} className={cx("inline-flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-xl transition", isDark ? "border-violet-200/14 bg-violet-950/55 text-violet-100/80 hover:bg-violet-800/55 hover:text-white" : "border-violet-200 bg-white/82 text-zinc-700 shadow-sm hover:bg-violet-50 hover:text-zinc-950")} aria-label="Log out" title="Log out">
+            <button type="button" onClick={() => void logout()} className="icon-button" aria-label="Log out" title="Log out">
               <LogOut size={16} />
             </button>
           </div>
         ) : (
-          <Link href="/login" className="inline-flex h-10 items-center gap-2 rounded-full bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] px-5 text-sm font-bold text-white shadow-[0_0_30px_rgba(139,92,246,0.46)] ring-1 ring-violet-200/20">
+          <Link href="/login" className="primary-button">
             <LogIn size={16} /> Log in
           </Link>
         )}
       </div>
-      <main className={cx("h-screen overflow-hidden transition-[margin] duration-200", sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[236px]")}>{children}</main>
+      <main className={cx("h-dvh overflow-hidden transition-[margin] duration-200", sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[236px]")}>{children}</main>
       <BottomNav />
     </div>
   );
@@ -107,7 +102,7 @@ function MobileMenu({
       <SheetTrigger asChild>
         <button
           type="button"
-          className={cx("fixed right-4 top-4 z-40 grid h-10 w-10 place-items-center rounded-full border shadow-sm backdrop-blur-xl transition md:hidden", isDark ? "border-violet-200/14 bg-violet-950/55 text-white hover:bg-violet-800/55" : "border-zinc-200 bg-white/92 text-zinc-900 hover:bg-zinc-50")}
+          className="icon-button fixed right-3 top-2.5 z-40 bg-[var(--background)] md:hidden"
           aria-label="Open menu"
         >
           <Menu size={21} />
@@ -115,7 +110,7 @@ function MobileMenu({
       </SheetTrigger>
       <SheetContent
         side="right"
-        className={cx("flex flex-col p-0", isDark ? "border-violet-200/10 bg-[#090313] text-white" : "border-zinc-200 bg-white text-zinc-950")}
+        className={cx("flex flex-col p-0", isDark ? "border-[var(--line)] bg-[var(--panel)] text-white" : "border-zinc-200 bg-white text-zinc-950")}
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5">
           <Logo />
@@ -234,7 +229,7 @@ function MobileMenuLink({
               : "text-zinc-800 hover:bg-violet-50 hover:text-[var(--royal)]",
         )}
       >
-        <Icon size={22} strokeWidth={active ? 3 : 2.2} fill={active ? "currentColor" : "none"} />
+        <Icon size={22} strokeWidth={active ? 2.3 : 1.8} fill="none" />
         <span>{label}</span>
       </Link>
     </SheetClose>

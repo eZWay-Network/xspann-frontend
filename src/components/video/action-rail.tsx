@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Check, Code2, Heart, Link2, MessageCircle, Plus, Send, X } from "lucide-react";
+import { Bookmark, Check, Code2, Heart, Link2, MessageCircle, Plus, Send, Share2, X } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
@@ -24,9 +26,8 @@ export function ActionRail({
   onFollowChange?: (userId: number, following: boolean) => void;
 }) {
   const { authenticated, token, user } = useAuth();
-  const { theme } = useTheme();
   const queryClient = useQueryClient();
-  const isDark = theme === "dark";
+  const router = useRouter();
   const [liked, setLiked] = useState(video.viewer.liked);
   const [saved, setSaved] = useState(video.viewer.saved);
   const [following, setFollowing] = useState(video.viewer.following);
@@ -38,7 +39,8 @@ export function ActionRail({
   const isOwnVideo = user?.id === video.user.id;
 
   async function toggleFollow() {
-    if (!authenticated || !token || isOwnVideo) return;
+    if (isOwnVideo) return;
+    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
 
     const wasFollowing = following;
     setFollowing(!wasFollowing);
@@ -57,7 +59,7 @@ export function ActionRail({
   }
 
   async function toggleLike() {
-    if (!authenticated || !token) return;
+    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
 
     const wasLiked = liked;
     setLiked((value) => !value);
@@ -77,7 +79,7 @@ export function ActionRail({
   }
 
   async function toggleSave() {
-    if (!authenticated || !token) return;
+    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
 
     const wasSaved = saved;
     setSaved((value) => !value);
@@ -180,18 +182,19 @@ export function ActionRail({
   }
 
   return (
-    <div className="flex w-[72px] flex-col items-center gap-5 pb-4 max-sm:absolute max-sm:bottom-28 max-sm:right-2 max-sm:z-20 max-sm:w-14">
+    <div className="flex w-14 shrink-0 flex-col items-center gap-4 pb-2 max-sm:absolute max-sm:bottom-20 max-sm:right-2 max-sm:z-20 max-sm:gap-3">
       <div className="relative mb-1">
         <Link href={`/profile/${video.user.username}`} aria-label={`Open @${video.user.username} profile`} className="block rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-200">
-          <UserAvatar src={video.user.avatar} size={50} className="h-[50px] w-[50px] ring-2 ring-violet-200/85 transition hover:scale-105 max-sm:h-11 max-sm:w-11" />
+          <UserAvatar src={video.user.avatar} size={50} className="h-12 w-12 transition hover:opacity-85 max-sm:h-11 max-sm:w-11" />
         </Link>
         {!isOwnVideo && (
           <button
             onClick={() => void toggleFollow()}
             className={cx(
-              "absolute -bottom-2 left-1/2 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full text-white shadow-lg ring-2 transition",
-              following ? "bg-[var(--royal)] ring-white hover:bg-[var(--royal-bright)]" : "bg-[var(--royal-bright)] ring-white/80 hover:brightness-110",
+              "absolute -bottom-2 left-1/2 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full text-white transition",
+              following ? "bg-[#7545e8] hover:bg-[#6635d5]" : "bg-[#7545e8] hover:bg-[#6635d5]",
             )}
+            aria-pressed={following}
             aria-label={following ? "Unfollow creator" : "Follow creator"}
             title={following ? "Following" : "Follow"}
           >
@@ -199,10 +202,10 @@ export function ActionRail({
           </button>
         )}
       </div>
-      <ActionButton label={compactNumber(likes)} active={liked} isDark={isDark} onClick={() => void toggleLike()} icon={<Heart size={28} fill={liked ? "currentColor" : "currentColor"} />} />
-      <ActionButton label={compactNumber(video.stats.comments)} isDark={isDark} onClick={onComments} icon={<MessageCircle size={28} fill="currentColor" />} />
-      <ActionButton label={compactNumber(saves)} active={saved} isDark={isDark} onClick={() => void toggleSave()} icon={<Bookmark size={28} fill={saved ? "currentColor" : "currentColor"} />} />
-      <ActionButton label={compactNumber(shares)} isDark={isDark} onClick={() => setShareOpen(true)} icon={<ForwardShareIcon />} />
+      <ActionButton label={compactNumber(likes)} name={liked ? "Unlike video" : "Like video"} kind="like" active={liked} onClick={() => void toggleLike()} icon={<Heart size={25} strokeWidth={1.8} fill={liked ? "currentColor" : "none"} />} />
+      <ActionButton label={compactNumber(video.stats.comments)} name="Open comments" onClick={onComments} icon={<MessageCircle size={25} strokeWidth={1.8} />} />
+      <ActionButton label={compactNumber(saves)} name={saved ? "Unsave video" : "Save video"} active={saved} onClick={() => void toggleSave()} icon={<Bookmark size={25} strokeWidth={1.8} fill={saved ? "currentColor" : "none"} />} />
+      <ActionButton label={compactNumber(shares)} name="Share video" onClick={() => setShareOpen(true)} icon={<Share2 size={24} strokeWidth={1.8} />} />
       {shareOpen && (
         <ShareSheet
           video={video}
@@ -246,14 +249,11 @@ function ShareSheet({
   ];
 
   return (
-    <div className={cx("fixed inset-0 z-50 grid place-items-center px-4 backdrop-blur-[2px]", isDark ? "bg-black/68" : "bg-black/35")} onClick={onClose}>
-      <section
-        className={cx("flex max-h-[min(86vh,560px)] w-full max-w-[480px] flex-col overflow-hidden rounded-lg shadow-2xl ring-1", isDark ? "bg-[#181818] text-white ring-white/10" : "bg-white text-zinc-950 ring-zinc-200")}
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined} className="share-dialog">
         <div className="grid h-16 grid-cols-[40px_1fr_40px] items-center px-5">
           <span aria-hidden="true" />
-          <h2 className="text-base font-bold">Share to</h2>
+          <DialogTitle className="text-center text-base font-semibold">Share video</DialogTitle>
           <button type="button" onClick={onClose} className={cx("grid h-10 w-10 place-items-center rounded-full transition", isDark ? "text-white hover:bg-white/10" : "text-zinc-700 hover:bg-zinc-100")} aria-label="Close share">
             <X size={24} />
           </button>
@@ -271,7 +271,7 @@ function ShareSheet({
         </div>
 
         <div className={cx("border-t px-6 py-6", isDark ? "border-white/10" : "border-zinc-200")}>
-          <div className="grid grid-cols-4 gap-x-5 gap-y-6 max-[380px]:grid-cols-3">
+          <div className="grid grid-cols-4 gap-x-2 gap-y-6 max-[360px]:grid-cols-3">
             {actions.map((action) => (
               <button
                 key={action.channel}
@@ -292,33 +292,16 @@ function ShareSheet({
             </p>
           )}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function ForwardShareIcon() {
+function ActionButton({ icon, label, name, kind, active, onClick }: { icon: React.ReactNode; label: string; name: string; kind?: string; active?: boolean; onClick: () => void }) {
   return (
-    <svg width="29" height="29" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <path
-        d="M18.7 6.1c-.8-.7-2.1-.1-2.1 1v4.1C9.7 11.9 5.2 15.8 3.4 22.8c-.3 1.2 1.2 2 2.1 1.1 3.2-3.1 6.8-4.4 11.1-4.1v4.7c0 1.1 1.3 1.7 2.1 1l9.4-8.1c.6-.5.6-1.5 0-2L18.7 6.1Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function ActionButton({ icon, label, active = false, isDark, onClick }: { icon: React.ReactNode; label: string; active?: boolean; isDark: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="group flex w-16 flex-col items-center gap-1 text-center max-sm:w-12" aria-label={label}>
-      <span className={cx(
-        "grid h-[50px] w-[50px] place-items-center rounded-full shadow-[0_0_24px_rgba(109,40,217,0.18)] ring-1 transition max-sm:h-11 max-sm:w-11",
-        isDark ? "bg-violet-950/75 text-violet-50 ring-violet-200/12 group-hover:bg-violet-800/85" : "bg-zinc-100 text-zinc-950 ring-zinc-200 group-hover:bg-zinc-200",
-        active && "bg-violet-600 text-white ring-violet-200/45",
-      )}>
-        {icon}
-      </span>
-      <span className={cx("text-xs font-bold max-sm:text-[11px]", isDark ? "text-violet-50/88" : "text-zinc-700")}>{label}</span>
+    <button type="button" onClick={onClick} className="group flex w-14 flex-col items-center gap-1.5 rounded-xl text-center" aria-label={`${name}, ${label}`} aria-pressed={active} title={name}>
+      <span className="feed-action-icon" data-active={active} data-kind={kind}>{icon}</span>
+      <span className="text-[11px] font-semibold tabular-nums text-[var(--muted)] max-sm:text-white">{label}</span>
     </button>
   );
 }
