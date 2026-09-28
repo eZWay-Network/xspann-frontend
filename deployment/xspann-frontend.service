@@ -1,0 +1,26 @@
+[Unit]
+Description=XSpann Next.js frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xspan6811
+Group=xspan6811
+WorkingDirectory=/home/xspann.webermelon.dev/public_html
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=NODE_OPTIONS=--max-old-space-size=512
+ExecStart=/usr/bin/node /home/xspann.webermelon.dev/public_html/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/xspann.webermelon.dev/public_html/.next
+
+[Install]
+WantedBy=multi-user.target
