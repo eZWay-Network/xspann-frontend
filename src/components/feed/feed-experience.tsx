@@ -225,7 +225,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
             <article
               key={video.id}
               data-video-id={video.id}
-              className="feed-item relative flex snap-start items-center justify-center sm:px-6 sm:pb-4 sm:pt-1"
+              className="feed-item relative flex snap-start items-center justify-center sm:px-6 sm:py-4"
             >
               <div className="feed-stage">
                 <div className="feed-presentation">

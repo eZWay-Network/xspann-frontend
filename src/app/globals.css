@@ -216,8 +216,8 @@ button:not(:disabled), [role="button"] { cursor: pointer; }
 
 @media (min-width: 768px) {
   .feed-layout { height: 100dvh; }
-  .feed-header { height: 68px; }
-  .feed-scroller { height: calc(100% - 68px); }
+  .feed-header { display: none; height: 0; }
+  .feed-scroller { height: 100%; }
   .page-content { padding-top: 84px; padding-bottom: 40px; }
 }
 @media (max-width: 639px) {
