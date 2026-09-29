@@ -180,7 +180,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {!collapsed && (
         <footer className="mt-auto pt-12 text-[11px] leading-6 text-[var(--muted)]">
           <p className="font-medium">A little inspiration. Every day.</p>
-          <p>© 2026 XSpann RNB</p>
+          <p>© 2026 XPN social</p>
         </footer>
       )}
     </aside>
@@ -304,13 +304,13 @@ function MoreSheetContent({
           <div className="space-y-2">
             <MorePanelRow
               icon={<Sparkles size={19} />}
-              label="XSpann RNB Studio"
+              label="XPN social Studio"
               href="/posts"
               badge
             />
             <MorePanelRow
               icon={<Wand2 size={19} />}
-              label="Create XSpann RNB effects"
+              label="Create XPN social effects"
               href="/upload"
             />
           </div>

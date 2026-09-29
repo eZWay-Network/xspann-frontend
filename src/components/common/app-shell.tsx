@@ -92,7 +92,7 @@ function MobileMenu({
   ];
   const otherItems = [
     { label: "Settings", href: "/settings", icon: Settings },
-    { label: "XSpann RNB Studio", href: "/posts", icon: Sparkles },
+    { label: "XPN social Studio", href: "/posts", icon: Sparkles },
     { label: "Create effects", href: "/upload", icon: Wand2 },
     { label: "Help Center", href: "/settings", icon: HelpCircle },
   ];

@@ -137,7 +137,7 @@ export function ActionRail({
     }
 
     if (channel === "embed") {
-      const embedCode = `<iframe src="${shareUrl}" title="XSpann RNB video" width="360" height="640" allowfullscreen></iframe>`;
+      const embedCode = `<iframe src="${shareUrl}" title="XPN social video" width="360" height="640" allowfullscreen></iframe>`;
       const copied = await writeToClipboard(embedCode);
       setShareMessage(copied ? "Embed code copied" : "Could not copy embed code");
       if (copied) await recordShare(channel);
@@ -157,12 +157,12 @@ export function ActionRail({
     }
 
     if (channel === "telegram") {
-      window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XSpann RNB")}`, "_blank", "noopener,noreferrer");
+      window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
       return;
     }
 
     if (channel === "x") {
-      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XSpann RNB")}`, "_blank", "noopener,noreferrer");
+      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -172,12 +172,12 @@ export function ActionRail({
     }
 
     if (channel === "pinterest") {
-      window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XSpann RNB")}`, "_blank", "noopener,noreferrer");
+      window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
       return;
     }
 
     if (typeof navigator !== "undefined" && "share" in navigator) {
-      await navigator.share({ title: "XSpann RNB", text: video.caption ?? undefined, url: shareUrl }).catch(() => undefined);
+      await navigator.share({ title: "XPN social", text: video.caption ?? undefined, url: shareUrl }).catch(() => undefined);
     }
   }
 

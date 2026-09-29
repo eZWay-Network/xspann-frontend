@@ -31,7 +31,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
 
   const title = isRegister ? "Create your account" : "Welcome back";
   const helper = isRegister
-    ? "Start posting vertical moments on XSpann RNB."
+    ? "Start posting vertical moments on XPN social."
     : "Sign in to continue your creator flow.";
   const submitLabel = isRegister ? "Register" : "Login";
 
@@ -185,7 +185,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
             isDark ? "text-violet-100/62" : "text-zinc-600",
           )}
         >
-          {isRegister ? "Already have an account?" : "New to XSpann RNB?"}{" "}
+          {isRegister ? "Already have an account?" : "New to XPN social?"}{" "}
           <Link
             className={cx(
               "font-bold",

@@ -111,8 +111,8 @@ const restoreTheme = `
 `;
 
 export const metadata: Metadata = {
-  title: "XSpann RNB",
-  description: "XSpann RNB short-video platform UI mockup.",
+  title: "XPN social",
+  description: "XPN social short-video platform UI mockup.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
