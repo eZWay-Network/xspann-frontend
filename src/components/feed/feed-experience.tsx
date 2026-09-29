@@ -232,7 +232,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                 <div className="video-frame">
                   <VideoPlayer
                     video={video}
-                    paused={paused || commentsOpen}
+                    paused={paused}
                     muted={muted}
                     isActive={video.id === effectiveActiveVideoId}
                     priority={video.id === feedVideos[0]?.id}
