@@ -344,8 +344,8 @@ function MoreSheetContent({
                   className={cx(
                     "flex h-12 w-full items-center gap-3 rounded-md px-1 text-left text-[16px] font-semibold transition",
                     isDark
-                      ? "text-white hover:bg-violet-500/12"
-                      : "text-violet-950 hover:bg-violet-100",
+                      ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+                      : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
                   )}
                 >
                   <LogOut size={19} /> Log out
@@ -393,8 +393,8 @@ function MorePanelRow({
         className={cx(
           "flex h-12 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-[16px] font-semibold transition",
           isDark
-            ? "text-white hover:bg-violet-500/12"
-            : "text-violet-950 hover:bg-violet-100",
+            ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+            : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
         )}
       >
         {content}
@@ -410,8 +410,8 @@ function MorePanelRow({
         className={cx(
           "flex h-12 items-center justify-between gap-3 rounded-md px-1 text-[16px] font-semibold transition",
           isDark
-            ? "text-white hover:bg-violet-500/12"
-            : "text-violet-950 hover:bg-violet-100",
+            ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+            : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
         )}
       >
         {content}
