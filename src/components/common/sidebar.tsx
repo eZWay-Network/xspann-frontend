@@ -96,13 +96,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
 
-      <form action="/search" role="search" className={cx("mb-6 flex shrink-0 items-center rounded-xl bg-[var(--surface)] text-[var(--muted)] focus-within:outline-2 focus-within:outline-[var(--royal)]", collapsed ? "justify-center" : "px-3.5")}>
+      <form action="/search" role="search" className={cx("mb-6 flex shrink-0 items-center rounded-xl bg-[var(--surface)] text-[var(--muted)]", collapsed ? "justify-center" : "px-3.5")}>
         {collapsed ? (
           <Link href="/search" className="icon-button" aria-label="Search"><Search size={21} strokeWidth={1.8} /></Link>
         ) : (
           <>
             <Search size={18} strokeWidth={1.8} />
-            <input name="q" aria-label="Search videos and creators" className="h-11 min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search" />
+            <input name="q" aria-label="Search videos and creators" className="sidebar-search-input h-11 min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search" />
           </>
         )}
       </form>
