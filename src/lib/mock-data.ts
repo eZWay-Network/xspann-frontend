@@ -4,7 +4,7 @@ export const currentUser: UserSummary = {
   id: 99,
   username: "aziz.builder",
   avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80",
-  bio: "Building XSpann RNB one clean release at a time.",
+  bio: "Building XPN social one clean release at a time.",
   verified: true,
 };
 
@@ -55,7 +55,7 @@ export const videos: Video[] = [
     sound_external_id: null,
     sound_preview_url: null,
     music: "original sound - jessica.luv",
-    tags: ["fyp", "xspannrnb", "goodvibes"],
+    tags: ["fyp", "xpnsocial", "goodvibes"],
     location_name: "Pabna",
     visibility: "public",
     high_quality_upload: true,
@@ -129,7 +129,7 @@ export const comments: Comment[] = [
     id: 2,
     video_id: 1001,
     parent_id: null,
-    body: "Royal purple theme fits XSpann RNB so well.",
+    body: "Royal purple theme fits XPN social so well.",
     user: creators[3],
     created_at: "8m ago",
   },
@@ -143,4 +143,4 @@ export const comments: Comment[] = [
   },
 ];
 
-export const trendingTags = ["#xspannrnb", "#royalpurple", "#creatorflow", "#nightcity", "#verticalvideo"];
+export const trendingTags = ["#xpnsocial", "#royalpurple", "#creatorflow", "#nightcity", "#verticalvideo"];

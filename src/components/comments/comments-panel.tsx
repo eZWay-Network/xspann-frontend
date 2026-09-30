@@ -20,7 +20,17 @@ import { createComment, deleteComment, getComments } from "@/services/comments";
 import type { Comment, PaginatedResponse, Video } from "@/types/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export function CommentsPanel({ video, open, onClose }: { video: Video; open: boolean; onClose: () => void }) {
+export function CommentsPanel({
+  video,
+  open,
+  onClose,
+  onCommentCountChange,
+}: {
+  video: Video;
+  open: boolean;
+  onClose: () => void;
+  onCommentCountChange?: (videoId: number, delta: number) => void;
+}) {
   const { authenticated, token, user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -46,8 +56,11 @@ export function CommentsPanel({ video, open, onClose }: { video: Video; open: bo
     onSuccess: (response) => {
       queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => ({
         data: [response.data, ...(current?.data ?? [])],
-        meta: current?.meta ?? { current_page: 1, last_page: 1, per_page: 50, total: 0 },
+        meta: current?.meta
+          ? { ...current.meta, total: current.meta.total + 1 }
+          : { current_page: 1, last_page: 1, per_page: 50, total: 1 },
       }));
+      onCommentCountChange?.(video.id, 1);
       setBody("");
     },
     onError: (caught) => {
@@ -62,8 +75,13 @@ export function CommentsPanel({ video, open, onClose }: { video: Video; open: bo
     },
     onSuccess: (_response, commentId) => {
       queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => current
-        ? { ...current, data: current.data.filter((comment) => comment.id !== commentId) }
+        ? {
+          ...current,
+          data: current.data.filter((comment) => comment.id !== commentId),
+          meta: { ...current.meta, total: Math.max(0, current.meta.total - 1) },
+        }
         : current);
+      onCommentCountChange?.(video.id, -1);
       setDeleteTarget(null);
     },
     onError: (caught) => {
@@ -160,8 +178,8 @@ export function CommentsPanel({ video, open, onClose }: { video: Video; open: bo
       )}
       <form onSubmit={submitComment} className="mt-3 flex items-center gap-2">
         <UserAvatar src={user?.avatar} size={36} className="h-9 w-9" />
-        <div className={cx("flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full px-4", isDark ? "bg-white/10 text-white" : "bg-zinc-100 text-zinc-950")}>
-          <input value={body} onChange={(event) => setBody(event.target.value)} disabled={!authenticated || createCommentMutation.isPending} placeholder={authenticated ? "Add comment..." : "Log in to comment"} className={cx("min-w-0 flex-1 bg-transparent text-[15px] outline-none disabled:cursor-not-allowed disabled:opacity-60", isDark ? "placeholder:text-violet-100/42" : "placeholder:text-zinc-400")} />
+        <div className={cx("flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full px-4 outline-none ring-0 focus-within:outline-none focus-within:ring-0", isDark ? "bg-white/10 text-white" : "bg-zinc-100 text-zinc-950")}>
+          <input value={body} onChange={(event) => setBody(event.target.value)} disabled={!authenticated || createCommentMutation.isPending} placeholder={authenticated ? "Add comment..." : "Log in to comment"} className={cx("comment-composer-input min-w-0 flex-1 border-0 bg-transparent text-[15px] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60", isDark ? "placeholder:text-violet-100/42" : "placeholder:text-zinc-400")} />
           <button type="button" disabled={!authenticated || createCommentMutation.isPending} onClick={() => setEmojiOpen((value) => !value)} className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45", emojiOpen ? isDark ? "bg-white/15 text-white" : "bg-zinc-200 text-zinc-950" : isDark ? "text-white hover:bg-white/10" : "text-zinc-950 hover:bg-zinc-200")} aria-label="Add emoji" aria-expanded={emojiOpen}>
             <SmilePlus size={21} />
           </button>

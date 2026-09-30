@@ -96,13 +96,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
 
-      <form action="/search" role="search" className={cx("mb-6 flex shrink-0 items-center rounded-xl bg-[var(--surface)] text-[var(--muted)] focus-within:outline-2 focus-within:outline-[var(--royal)]", collapsed ? "justify-center" : "px-3.5")}>
+      <form action="/search" role="search" className={cx("mb-6 flex shrink-0 items-center rounded-xl bg-[var(--surface)] text-[var(--muted)]", collapsed ? "justify-center" : "px-3.5")}>
         {collapsed ? (
           <Link href="/search" className="icon-button" aria-label="Search"><Search size={21} strokeWidth={1.8} /></Link>
         ) : (
           <>
             <Search size={18} strokeWidth={1.8} />
-            <input name="q" aria-label="Search videos and creators" className="h-11 min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search" />
+            <input name="q" aria-label="Search videos and creators" className="sidebar-search-input h-11 min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search" />
           </>
         )}
       </form>
@@ -180,7 +180,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {!collapsed && (
         <footer className="mt-auto pt-12 text-[11px] leading-6 text-[var(--muted)]">
           <p className="font-medium">A little inspiration. Every day.</p>
-          <p>© 2026 XSpann RNB</p>
+          <p>© 2026 XPN social</p>
         </footer>
       )}
     </aside>
@@ -304,13 +304,13 @@ function MoreSheetContent({
           <div className="space-y-2">
             <MorePanelRow
               icon={<Sparkles size={19} />}
-              label="XSpann RNB Studio"
+              label="XPN social Studio"
               href="/posts"
               badge
             />
             <MorePanelRow
               icon={<Wand2 size={19} />}
-              label="Create XSpann RNB effects"
+              label="Create XPN social effects"
               href="/upload"
             />
           </div>
@@ -344,8 +344,8 @@ function MoreSheetContent({
                   className={cx(
                     "flex h-12 w-full items-center gap-3 rounded-md px-1 text-left text-[16px] font-semibold transition",
                     isDark
-                      ? "text-white hover:bg-violet-500/12"
-                      : "text-violet-950 hover:bg-violet-100",
+                      ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+                      : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
                   )}
                 >
                   <LogOut size={19} /> Log out
@@ -393,8 +393,8 @@ function MorePanelRow({
         className={cx(
           "flex h-12 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-[16px] font-semibold transition",
           isDark
-            ? "text-white hover:bg-violet-500/12"
-            : "text-violet-950 hover:bg-violet-100",
+            ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+            : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
         )}
       >
         {content}
@@ -410,8 +410,8 @@ function MorePanelRow({
         className={cx(
           "flex h-12 items-center justify-between gap-3 rounded-md px-1 text-[16px] font-semibold transition",
           isDark
-            ? "text-white hover:bg-violet-500/12"
-            : "text-violet-950 hover:bg-violet-100",
+            ? "text-zinc-300 hover:bg-[var(--surface)] hover:text-white"
+            : "text-zinc-600 hover:bg-[var(--surface)] hover:text-zinc-950",
         )}
       >
         {content}

@@ -4,9 +4,9 @@ const JAMENDO_CLIENT_ID = process.env.NEXT_PUBLIC_JAMENDO_CLIENT_ID;
 
 export const fallbackTracks: MusicTrack[] = [
   { id: "original", name: "Original sound", artist: "Your video audio", provider: "original" },
-  { id: "royal-pulse", name: "Royal Pulse", artist: "XSpann RNB Sounds", provider: "local", preview_url: "/sounds/royal-pulse.wav" },
-  { id: "night-vertical", name: "Night Vertical", artist: "XSpann RNB Sounds", provider: "local", preview_url: "/sounds/night-vertical.wav" },
-  { id: "creator-glow", name: "Creator Glow", artist: "XSpann RNB Sounds", provider: "local", preview_url: "/sounds/creator-glow.wav" },
+  { id: "royal-pulse", name: "Royal Pulse", artist: "XPN social Sounds", provider: "local", preview_url: "/sounds/royal-pulse.wav" },
+  { id: "night-vertical", name: "Night Vertical", artist: "XPN social Sounds", provider: "local", preview_url: "/sounds/night-vertical.wav" },
+  { id: "creator-glow", name: "Creator Glow", artist: "XPN social Sounds", provider: "local", preview_url: "/sounds/creator-glow.wav" },
 ];
 
 type JamendoTrack = {

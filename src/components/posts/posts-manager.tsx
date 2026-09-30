@@ -154,7 +154,7 @@ export function PostsManager() {
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const extension = blob.type.includes("webm") ? "webm" : "mp4";
-      const filename = `xspann-post-${post.id}.${extension}`;
+      const filename = `xpn-social-post-${post.id}.${extension}`;
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = filename;

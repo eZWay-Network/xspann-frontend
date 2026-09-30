@@ -8,7 +8,7 @@ import { videos } from "@/lib/mock-data";
 import { queryKeys } from "@/lib/query-keys";
 import { getFollowingFeedVideos, getFeedVideos, getVideo, recordVideoView } from "@/services/videos";
 import type { Video } from "@/types/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronUp,
@@ -47,15 +47,18 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<number | null>(null);
   const [viewCountsByVideoId, setViewCountsByVideoId] = useState<Record<number, number>>({});
+  const [commentCountsByVideoId, setCommentCountsByVideoId] = useState<Record<number, number>>({});
   const [followingByUserId, setFollowingByUserId] = useState<Record<number, boolean>>({});
   const feedRef = useRef<HTMLElement>(null);
   const viewedVideoIdsRef = useRef<Set<number>>(new Set());
   const authScope = token ? "auth" : "guest";
   const feedScope = feedTab === "following" ? "following" : "for-you";
+  const feedQueryKey = useMemo(() => queryKeys.feed(feedScope, authScope, initialVideoId), [authScope, feedScope, initialVideoId]);
+  const queryClient = useQueryClient();
 
   const feedQuery = useQuery({
     enabled: !authLoading,
-    queryKey: queryKeys.feed(feedScope, authScope, initialVideoId),
+    queryKey: feedQueryKey,
     queryFn: async () => {
       const feedPromise = feedTab === "following" && token
         ? getFollowingFeedVideos(20, token)
@@ -91,12 +94,13 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
     stats: {
       ...video.stats,
       views: viewCountsByVideoId[video.id] ?? video.stats.views,
+      comments: commentCountsByVideoId[video.id] ?? video.stats.comments,
     },
     viewer: {
       ...video.viewer,
       following: followingByUserId[video.user.id] ?? video.viewer.following,
     },
-  })), [baseFeedVideos, followingByUserId, viewCountsByVideoId]);
+  })), [baseFeedVideos, commentCountsByVideoId, followingByUserId, viewCountsByVideoId]);
   const effectiveActiveVideoId = feedVideos.some((video) => video.id === activeVideoId) ? activeVideoId : feedVideos[0]?.id ?? null;
 
   useEffect(() => {
@@ -144,6 +148,16 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const updateCreatorFollowState = useCallback((userId: number, following: boolean) => {
     setFollowingByUserId((current) => ({ ...current, [userId]: following }));
   }, []);
+
+  const updateCommentCount = useCallback((videoId: number, delta: number) => {
+    setCommentCountsByVideoId((current) => {
+      const sourceCount = current[videoId] ?? baseFeedVideos.find((video) => video.id === videoId)?.stats.comments ?? 0;
+      return { ...current, [videoId]: Math.max(0, sourceCount + delta) };
+    });
+    queryClient.setQueryData<Video[]>(feedQueryKey, (current) => current?.map((video) => video.id === videoId
+      ? { ...video, stats: { ...video.stats, comments: Math.max(0, video.stats.comments + delta) } }
+      : video));
+  }, [baseFeedVideos, feedQueryKey, queryClient]);
 
   const activeVideoIndex = effectiveActiveVideoId
     ? feedVideos.findIndex((video) => video.id === effectiveActiveVideoId)
@@ -211,14 +225,14 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
             <article
               key={video.id}
               data-video-id={video.id}
-              className="feed-item relative flex snap-start items-center justify-center sm:px-6 sm:pb-4 sm:pt-1"
+              className="feed-item relative flex snap-start items-center justify-center sm:px-6 sm:py-4"
             >
               <div className="feed-stage">
                 <div className="feed-presentation">
                 <div className="video-frame">
                   <VideoPlayer
                     video={video}
-                    paused={paused || commentsOpen}
+                    paused={paused}
                     muted={muted}
                     isActive={video.id === effectiveActiveVideoId}
                     priority={video.id === feedVideos[0]?.id}
@@ -294,6 +308,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
           video={activeVideo}
           open={commentsOpen}
           onClose={() => setCommentsOpen(false)}
+          onCommentCountChange={updateCommentCount}
         />
       )}
     </div>
