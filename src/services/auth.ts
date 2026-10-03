@@ -78,6 +78,13 @@ export function login(payload: LoginPayload) {
   });
 }
 
+export function loginWithGoogle(idToken: string) {
+  return apiRequest<AuthResponse>("/auth/social/google", {
+    method: "POST",
+    body: JSON.stringify({ token: idToken }),
+  });
+}
+
 export function register(payload: RegisterPayload) {
   return apiRequest<AuthResponse>("/auth/register", {
     method: "POST",

@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
@@ -10,10 +10,11 @@ import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { ApiError } from "@/services/api";
 import { cx } from "@/lib/format";
+import { GoogleSignIn } from "./google-sign-in";
 
 type FieldErrors = Record<string, string[]>;
 
-export function AuthCard({ mode }: { mode: "login" | "register" }) {
+export function AuthCard({ mode, googleClientId }: { mode: "login" | "register"; googleClientId: string }) {
   const isRegister = mode === "register";
   const router = useRouter();
   const auth = useAuth();
@@ -27,6 +28,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
+  const [googleError, setGoogleError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const title = isRegister ? "Create your account" : "Welcome back";
@@ -37,11 +39,37 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
 
   const firstError = useMemo(() => Object.values(errors).flat()[0], [errors]);
 
+  const redirectAfterSignIn = useCallback(() => {
+    const nextPath = new URLSearchParams(window.location.search).get("next");
+    router.replace(nextPath?.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/feed");
+  }, [router]);
+
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    setSubmitting(true);
+    setErrors({});
+    setMessage("");
+    setGoogleError("");
+
+    try {
+      await auth.loginWithGoogle(credential);
+      redirectAfterSignIn();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setGoogleError(Object.values(error.errors).flat()[0] ?? error.message);
+      } else {
+        setGoogleError("Google sign-in failed. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }, [auth, redirectAfterSignIn]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setErrors({});
     setMessage("");
+    setGoogleError("");
 
     try {
       if (isRegister) {
@@ -50,11 +78,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
         await auth.login({ email: values.email, password: values.password });
       }
 
-      const nextPath = typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("next")
-        : null;
-
-      router.replace(nextPath?.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/feed");
+      redirectAfterSignIn();
     } catch (error) {
       if (error instanceof ApiError) {
         setErrors(error.errors);
@@ -83,7 +107,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
         isDark ? "text-white" : "text-zinc-950",
       )}
     >
-      <section className="glass-panel w-full max-w-md rounded-2xl p-7 sm:p-9">
+      <section className="glass-panel w-full max-w-md rounded-2xl p-7 shadow-[0_18px_60px_-38px_rgba(67,31,142,0.45)] sm:p-9">
         <div className="mb-7">
           <Logo />
         </div>
@@ -179,6 +203,21 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
             {submitting ? "Please wait" : submitLabel}
           </button>
         </form>
+        {googleClientId && (
+          <>
+            <div className="my-5 flex items-center gap-3" aria-hidden="true">
+              <span className="h-px flex-1 bg-[var(--line)]" />
+              <span className={cx("text-xs font-medium", isDark ? "text-violet-100/50" : "text-zinc-500")}>or</span>
+              <span className="h-px flex-1 bg-[var(--line)]" />
+            </div>
+            <GoogleSignIn clientId={googleClientId} isDark={isDark} onCredential={handleGoogleCredential} />
+            {googleError && (
+              <p role="alert" className={cx("mt-3 text-center text-sm", isDark ? "text-pink-200" : "text-pink-700")}>
+                {googleError}
+              </p>
+            )}
+          </>
+        )}
         <p
           className={cx(
             "mt-5 text-center text-sm",
