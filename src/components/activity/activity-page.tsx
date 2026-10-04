@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { cx, shortRelativeTime } from "@/lib/format";
 import { categoryOf, collapseNotifications, notificationDetails, type ActivityItem } from "@/lib/notifications";
 import { queryKeys } from "@/lib/query-keys";
@@ -119,7 +120,7 @@ export function ActivityPage() {
         )}
 
         {actionError && <p role="alert" className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500">{actionError}</p>}
-        {notificationsQuery.isPending && <div className="grid min-h-52 place-items-center"><LoaderCircle className="animate-spin text-[var(--royal)]" aria-label="Loading activity" /></div>}
+        {notificationsQuery.isPending && <div className="grid min-h-52 place-items-center"><XpnLoader label="Loading activity..." /></div>}
         {notificationsQuery.isError && <div role="alert" className="mt-8 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-6 text-center"><p>Could not load your activity.</p><button type="button" onClick={() => void notificationsQuery.refetch()} className="mt-3 text-sm font-semibold text-[var(--royal)]">Try again</button></div>}
         {!notificationsQuery.isPending && !notificationsQuery.isError && notifications.length === 0 && (
           <div className="mt-9 rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-6 py-14 text-center">
@@ -138,7 +139,7 @@ export function ActivityPage() {
         )}
         {notificationsQuery.hasNextPage && !notificationsQuery.isError && (
           <button type="button" onClick={() => void notificationsQuery.fetchNextPage()} disabled={notificationsQuery.isFetchingNextPage} className="mx-auto mt-8 block rounded-full border border-[var(--line)] bg-[var(--surface)] px-6 py-2.5 text-sm font-semibold hover:bg-[var(--surface-hover)] disabled:opacity-50">
-            {notificationsQuery.isFetchingNextPage ? "Loading..." : "Load more activity"}
+            {notificationsQuery.isFetchingNextPage ? <XpnLoader compact label="Loading activity..." /> : "Load more activity"}
           </button>
         )}
       </div>

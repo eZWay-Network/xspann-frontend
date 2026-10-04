@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import {
   Dialog,
   DialogContent,
@@ -250,9 +251,7 @@ export function ProfileCard({ username }: { username: string }) {
   if (loading) {
     return (
       <section className="grid h-full place-items-center px-4">
-        <div className={cx("inline-flex items-center gap-2 text-sm font-semibold", isDark ? "text-violet-100/75" : "text-violet-950/60")}>
-          <LoaderCircle className="animate-spin" size={18} /> Loading profile...
-        </div>
+        <XpnLoader label="Loading profile..." />
       </section>
     );
   }
@@ -669,10 +668,7 @@ export function ProfileCard({ username }: { username: string }) {
 
             <div className="flex-1 space-y-3 overflow-y-auto pr-1">
               {relationLoading && (
-                <div className={cx("grid h-40 place-items-center text-sm font-semibold", isDark ? "text-violet-100/55" : "text-zinc-500")}>
-                  <LoaderCircle className="mb-2 animate-spin" size={22} />
-                  Loading
-                </div>
+                <div className="grid h-40 place-items-center"><XpnLoader label="Loading accounts..." /></div>
               )}
 
               {!relationLoading && relationError && (

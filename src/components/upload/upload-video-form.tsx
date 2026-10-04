@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { ApiError } from "@/services/api";
 import { fallbackTracks, searchMusicTracks } from "@/services/music";
 import { requestVideoUpload, uploadLocalAudio, uploadLocalVideo } from "@/services/uploads";
@@ -425,7 +426,7 @@ export function UploadVideoForm() {
   }
 
   if (loading) {
-    return <div className="grid min-h-[calc(100vh-80px)] place-items-center px-4 text-violet-100/70"><LoaderCircle className="animate-spin" size={28} /></div>;
+    return <div className="grid min-h-[calc(100vh-80px)] place-items-center px-4"><XpnLoader label="Loading upload..." /></div>;
   }
 
   if (!authenticated) {

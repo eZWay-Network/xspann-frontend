@@ -7,6 +7,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Search, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/common/auth-provider";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { compactNumber, cx } from "@/lib/format";
 import { trendingTags } from "@/lib/mock-data";
 import { getDiscoverVideos } from "@/services/videos";
@@ -73,7 +74,8 @@ function SearchResults({ initialQuery }: { initialQuery: string }) {
         <div className="my-5 flex flex-wrap gap-2" aria-label="Explore hashtags">
           {trendingTags.map((tag) => <button type="button" key={tag} onClick={() => setQuery(query === tag ? "" : tag)} aria-pressed={query === tag} className={cx("rounded-full px-3.5 py-2 text-xs font-medium transition", query === tag ? "bg-violet-500/10 text-[var(--royal)]" : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)]")}>{tag}</button>)}
         </div>
-        <p role="status" className="mb-4 text-xs text-[var(--muted)]">{feed.isPending ? "Finding videos…" : searchTerm ? `${total} matching ${total === 1 ? "video" : "videos"} in discovery` : "Explore videos"}</p>
+        {!feed.isPending && <p role="status" className="mb-4 text-xs text-[var(--muted)]">{searchTerm ? `${total} matching ${total === 1 ? "video" : "videos"} in discovery` : "Explore videos"}</p>}
+        {feed.isPending && <div className="flex min-h-56 items-center justify-center"><XpnLoader label="Finding videos..." /></div>}
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
           {results.map((video) => (
             <Link key={video.id} href={`/video/${video.id}`} className="group min-w-0 rounded-xl" aria-label={`Watch video by @${video.user.username}: ${video.caption ?? ""}`}>
@@ -88,7 +90,7 @@ function SearchResults({ initialQuery }: { initialQuery: string }) {
         </div>
         {!feed.isPending && !feed.isError && !results.length && <div className="py-16 text-center"><Search size={32} strokeWidth={1.5} className="mx-auto mb-4 text-[var(--muted)]" /><h2 className="font-semibold">No matching videos</h2><p className="mt-2 text-sm text-[var(--muted)]">Try a different creator, hashtag, or keyword.</p><button type="button" onClick={() => setQuery("")} className="mt-5 text-sm font-semibold text-[var(--royal)]">Explore all videos</button></div>}
         {feed.isError && <div role="alert" className="py-8 text-center text-sm text-[var(--muted)]"><p>Could not load videos.</p><button type="button" onClick={() => void feed.refetch()} className="mt-2 font-semibold text-[var(--royal)]">Try again</button></div>}
-        {feed.isFetchingNextPage && <p role="status" className="py-5 text-center text-sm text-[var(--muted)]">Loading more videos...</p>}
+        {feed.isFetchingNextPage && <div className="flex justify-center py-5"><XpnLoader compact label="Loading more videos..." /></div>}
         <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
       </div>
     </section>

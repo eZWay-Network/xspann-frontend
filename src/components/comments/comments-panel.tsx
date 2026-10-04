@@ -7,6 +7,7 @@ import { ArrowUp, Heart, LoaderCircle, Send, SmilePlus, Trash2, X } from "lucide
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import {
   Dialog,
   DialogContent,
@@ -207,7 +208,7 @@ export function CommentsPanel({
       </div>
 
       <div className="modern-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {commentsQuery.isLoading && <p className="flex items-center gap-2 py-10 text-sm text-[var(--muted)]"><LoaderCircle size={18} className="animate-spin" /> Loading comments...</p>}
+        {commentsQuery.isLoading && <div className="flex justify-center py-10"><XpnLoader label="Loading comments..." /></div>}
         {!commentsQuery.isLoading && comments.map((comment) => (
           <div key={comment.id} className="border-b border-[var(--line)] pb-2 last:border-b-0">
             <CommentRow
@@ -339,7 +340,7 @@ function ReplyThread({ parentId, authenticated, currentUserId, reactionPendingId
   });
   return (
     <div className="ml-10 border-l border-[var(--line)] pl-3">
-      {repliesQuery.isLoading && <p className="py-3 text-xs text-[var(--muted)]">Loading replies...</p>}
+      {repliesQuery.isLoading && <div className="py-3"><XpnLoader compact label="Loading replies..." /></div>}
       {repliesQuery.isError && <p className="py-3 text-xs text-rose-500">Could not load replies.</p>}
       {repliesQuery.data?.data.map((reply) => (
         <CommentRow

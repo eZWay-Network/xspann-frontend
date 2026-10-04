@@ -2,6 +2,7 @@
 
 import { CommentsPanel } from "@/components/comments/comments-panel";
 import { useAuth } from "@/components/common/auth-provider";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { ActionRail } from "@/components/video/action-rail";
 import { cx } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -234,8 +235,8 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       </header>
       <section ref={feedRef} aria-label="Short videos" className="feed-scroller no-scrollbar snap-y snap-mandatory overflow-y-auto">
         {feedQuery.isPending && !feedVideos.length && (
-          <div role="status" className="grid h-full place-items-center text-sm text-[var(--muted)]">
-            Loading videos...
+          <div className="grid h-full place-items-center">
+            <XpnLoader label="Loading videos..." />
           </div>
         )}
         {feedQuery.isError && !feedVideos.length && (
@@ -313,7 +314,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
             </article>
           ))}
         {feedVideos.length > 0 && feedQuery.isFetchingNextPage && (
-          <p role="status" className="py-3 text-center text-sm text-[var(--muted)]">Loading more videos...</p>
+          <div className="flex justify-center py-3"><XpnLoader compact label="Loading more videos..." /></div>
         )}
         {feedVideos.length > 0 && feedQuery.isError && feedQuery.hasNextPage && (
           <button type="button" onClick={() => void feedQuery.fetchNextPage()} className="mx-auto block py-3 text-sm font-semibold text-[var(--royal)]">Retry loading videos</button>

@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, LoaderCircle, UserRoundPlus } from "lucide-react";
+import { Check, UserRoundPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { compactNumber, cx } from "@/lib/format";
 import { followUser } from "@/services/follows";
 import { getSuggestedUsers } from "@/services/users";
@@ -72,11 +73,7 @@ export function FollowingCreators() {
         </div>
 
         {loading && (
-          <div className={cx("grid h-72 place-items-center text-sm font-bold", isDark ? "text-violet-100/60" : "text-zinc-500")}>
-            <div className="inline-flex items-center gap-2">
-              <LoaderCircle className="animate-spin" size={18} /> Loading creators
-            </div>
-          </div>
+          <div className="grid h-72 place-items-center"><XpnLoader label="Loading creators..." /></div>
         )}
 
         {!loading && (

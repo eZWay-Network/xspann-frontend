@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
+import { XpnLoader } from "@/components/common/xpn-loader";
 import { useTheme } from "@/components/common/theme-provider";
 import { ApiError } from "@/services/api";
 import { deleteVideo, getMyVideos, updateVideo, type UpdateVideoPayload } from "@/services/videos";
@@ -251,10 +252,7 @@ export function PostsManager() {
           </div>
           <div className="overflow-x-auto">
             {loading ? (
-              <div className={cx("grid h-44 place-items-center text-sm font-bold", isDark ? "text-violet-100/52" : "text-zinc-500")}>
-                <LoaderCircle className="mb-2 animate-spin" size={22} />
-                Loading posts
-              </div>
+              <div className="grid h-44 place-items-center"><XpnLoader label="Loading posts..." /></div>
             ) : visiblePosts.length ? (
               visiblePosts.map((post) => (
                 <div key={post.id} className={cx("grid min-w-[920px] grid-cols-[minmax(360px,1.8fr)_140px_110px_110px_120px_220px] items-center border-b px-5 py-4 last:border-b-0", isDark ? "border-violet-200/10" : "border-zinc-100")}>
@@ -302,7 +300,7 @@ export function PostsManager() {
         </div>
         {postsQuery.hasNextPage && (
           <button type="button" onClick={() => void postsQuery.fetchNextPage()} disabled={postsQuery.isFetching} className={cx("mx-auto mt-6 block rounded-md border px-6 py-2.5 text-sm font-semibold disabled:opacity-50", isDark ? "border-violet-200/20 text-violet-100 hover:bg-white/10" : "border-zinc-200 text-zinc-900 hover:bg-zinc-50")}>
-            {postsQuery.isFetchingNextPage ? "Loading posts..." : "Load more posts"}
+            {postsQuery.isFetchingNextPage ? <XpnLoader compact label="Loading posts..." /> : "Load more posts"}
           </button>
         )}
       </div>
