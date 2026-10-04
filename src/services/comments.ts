@@ -1,8 +1,12 @@
 import type { Comment, PaginatedResponse, SingleResponse } from "@/types/api";
 import { apiRequest } from "./api";
 
-export function getComments(videoId: number, limit = 20) {
-  return apiRequest<PaginatedResponse<Comment>>(`/videos/${videoId}/comments?limit=${limit}`);
+export function getComments(videoId: number, limit = 20, token?: string | null) {
+  return apiRequest<PaginatedResponse<Comment>>(`/videos/${videoId}/comments?limit=${limit}`, { token });
+}
+
+export function getCommentReplies(parentId: number, limit = 20, token?: string | null) {
+  return apiRequest<PaginatedResponse<Comment>>(`/comments/${parentId}/replies?limit=${limit}`, { token });
 }
 
 export function createComment(videoId: number, body: string, token: string, parentId?: number | null) {

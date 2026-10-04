@@ -131,3 +131,11 @@ export type PaginatedResponse<T> = {
     total: number;
   };
 };
+
+export type Notification = {
+  id: number;
+  type: string;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+};

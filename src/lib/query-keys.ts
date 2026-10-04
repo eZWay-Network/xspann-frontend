@@ -1,4 +1,5 @@
 export const queryKeys = {
+  notifications: (userId: number) => ["notifications", userId] as const,
   comments: (videoId: number) => ["comments", videoId] as const,
   feed: (scope: "for-you" | "following", authScope: "auth" | "guest", initialVideoId?: number) =>
     ["feed", scope, authScope, initialVideoId ?? null] as const,

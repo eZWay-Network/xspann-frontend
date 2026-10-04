@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   HelpCircle,
+  Bell,
   Home,
   ListVideo,
   LogIn,
@@ -21,6 +22,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BottomNav } from "@/components/common/bottom-nav";
+import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
 import { Logo } from "@/components/common/logo";
 import { Sidebar } from "@/components/common/sidebar";
 import { useAuth } from "@/components/common/auth-provider";
@@ -86,6 +88,7 @@ function MobileMenu({
   const navItems = [
     { label: "For You", href: "/feed", icon: Home },
     { label: "Following", href: "/following", icon: UserRoundPlus },
+    { label: "Activity", href: "/activity", icon: Bell },
     { label: "Upload", href: "/upload", icon: PlusSquare },
     { label: "Posts", href: "/posts", icon: ListVideo },
     { label: "Profile", href: profileHref, icon: UserRound },
@@ -231,6 +234,7 @@ function MobileMenuLink({
       >
         <Icon size={22} strokeWidth={active ? 2.3 : 1.8} fill="none" />
         <span>{label}</span>
+        {label === "Activity" && <ActivityUnreadDot />}
       </Link>
     </SheetClose>
   );
