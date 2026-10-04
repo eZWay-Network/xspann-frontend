@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Heart, LoaderCircle, Send, SmilePlus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
@@ -297,11 +298,14 @@ function CommentRow({ comment, isReply = false, authenticated, currentUserId, re
   const selected = comment.viewer_reaction === "love";
   const busy = reactionPendingId != null;
   const updatingThis = reactionPendingId === comment.id;
+  const profileHref = `/profile/${encodeURIComponent(comment.user.username)}`;
   return (
     <article className="flex gap-3 py-3">
-      <UserAvatar src={comment.user.avatar} size={32} className="h-8 w-8" />
+      <Link href={profileHref} aria-label={`View ${comment.user.username}'s profile`} className="h-8 w-8 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--royal)]">
+        <UserAvatar src={comment.user.avatar} size={32} className="h-8 w-8" />
+      </Link>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{comment.user.name || comment.user.username}</p>
+        <Link href={profileHref} className="text-sm font-semibold hover:text-[var(--royal)] hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--royal)]">{comment.user.name || comment.user.username}</Link>
         <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.body}</p>
         <div className="mt-2 flex items-center gap-3 text-xs text-[var(--muted)]">
           <time dateTime={comment.created_at}>{shortRelativeTime(comment.created_at)}</time>
