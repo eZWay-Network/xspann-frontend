@@ -3,13 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Search, Play, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/common/auth-provider";
 import { compactNumber, cx } from "@/lib/format";
-import { trendingTags, videos } from "@/lib/mock-data";
-import { getFeedVideos } from "@/services/videos";
+import { trendingTags } from "@/lib/mock-data";
+import { getDiscoverVideos } from "@/services/videos";
 
 export function SearchExperience() {
   const searchParams = useSearchParams();
@@ -18,31 +18,62 @@ export function SearchExperience() {
 
 function SearchResults({ initialQuery }: { initialQuery: string }) {
   const [query, setQuery] = useState(initialQuery);
-  const { token, loading } = useAuth();
-  const feed = useQuery({
-    queryKey: ["search-discovery", token ? "auth" : "guest"],
+  const [searchTerm, setSearchTerm] = useState(initialQuery.trim().replace(/^#/, "").slice(0, 100));
+  const scrollerRef = useRef<HTMLElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const { token, user, loading } = useAuth();
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setSearchTerm(query.trim().replace(/^#/, "").slice(0, 100)), 300);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  const feed = useInfiniteQuery({
+    queryKey: ["discover-videos", user?.id ?? "guest", searchTerm],
     enabled: !loading,
-    queryFn: () => getFeedVideos(40, token).then((response) => response.data),
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) => getDiscoverVideos(searchTerm, pageParam, 20, token, signal),
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page
+      ? lastPage.meta.current_page + 1
+      : undefined,
     staleTime: 30_000,
   });
-  const availableVideos = feed.data?.length ? feed.data : videos;
-  const normalizedQuery = query.trim().replace(/^#/, "").toLowerCase();
-  const results = availableVideos.filter((video) => [video.caption, video.user.username, ...video.tags].join(" ").toLowerCase().includes(normalizedQuery));
+  const { hasNextPage, isFetching, isError: feedIsError, fetchNextPage } = feed;
+  const results = useMemo(() => {
+    const seen = new Set<number>();
+    return feed.data?.pages.flatMap((page) => page.data.filter((video) => {
+      if (seen.has(video.id)) return false;
+      seen.add(video.id);
+      return true;
+    })) ?? [];
+  }, [feed.data]);
+  const total = feed.data?.pages[0]?.meta.total ?? 0;
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    const target = loadMoreRef.current;
+    if (!root || !target || !hasNextPage || isFetching || feedIsError) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) void fetchNextPage();
+    }, { root, rootMargin: "500px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetching, feedIsError, fetchNextPage, results.length]);
 
   return (
-    <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8">
+    <section ref={scrollerRef} className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-2xl font-semibold tracking-tight">Discover</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">Find your next favorite video.</p>
         <form role="search" onSubmit={(event) => event.preventDefault()} className="mt-7 flex h-12 max-w-2xl items-center gap-3 rounded-xl bg-[var(--surface)] px-4 focus-within:outline-2 focus-within:outline-[var(--royal)]">
           <Search size={20} strokeWidth={1.8} className="shrink-0 text-[var(--muted)]" />
-          <input aria-label="Search videos, creators and hashtags" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search videos, creators, hashtags" />
+          <input aria-label="Search videos, creators and hashtags" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={100} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" placeholder="Search videos, creators, hashtags" />
           {query && <button type="button" onClick={() => setQuery("")} className="icon-button" aria-label="Clear search"><X size={18} /></button>}
         </form>
         <div className="my-5 flex flex-wrap gap-2" aria-label="Explore hashtags">
           {trendingTags.map((tag) => <button type="button" key={tag} onClick={() => setQuery(query === tag ? "" : tag)} aria-pressed={query === tag} className={cx("rounded-full px-3.5 py-2 text-xs font-medium transition", query === tag ? "bg-violet-500/10 text-[var(--royal)]" : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)]")}>{tag}</button>)}
         </div>
-        <p role="status" className="mb-4 text-xs text-[var(--muted)]">{feed.isPending ? "Finding videos…" : normalizedQuery ? `${results.length} matching ${results.length === 1 ? "video" : "videos"} in discovery` : "Explore videos"}</p>
+        <p role="status" className="mb-4 text-xs text-[var(--muted)]">{feed.isPending ? "Finding videos…" : searchTerm ? `${total} matching ${total === 1 ? "video" : "videos"} in discovery` : "Explore videos"}</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
           {results.map((video) => (
             <Link key={video.id} href={`/video/${video.id}`} className="group min-w-0 rounded-xl" aria-label={`Watch video by @${video.user.username}: ${video.caption ?? ""}`}>
@@ -55,7 +86,10 @@ function SearchResults({ initialQuery }: { initialQuery: string }) {
             </Link>
           ))}
         </div>
-        {!results.length && <div className="py-16 text-center"><Search size={32} strokeWidth={1.5} className="mx-auto mb-4 text-[var(--muted)]" /><h2 className="font-semibold">No matching videos</h2><p className="mt-2 text-sm text-[var(--muted)]">Try a different creator, hashtag, or keyword.</p><button type="button" onClick={() => setQuery("")} className="mt-5 text-sm font-semibold text-[var(--royal)]">Explore all videos</button></div>}
+        {!feed.isPending && !feed.isError && !results.length && <div className="py-16 text-center"><Search size={32} strokeWidth={1.5} className="mx-auto mb-4 text-[var(--muted)]" /><h2 className="font-semibold">No matching videos</h2><p className="mt-2 text-sm text-[var(--muted)]">Try a different creator, hashtag, or keyword.</p><button type="button" onClick={() => setQuery("")} className="mt-5 text-sm font-semibold text-[var(--royal)]">Explore all videos</button></div>}
+        {feed.isError && <div role="alert" className="py-8 text-center text-sm text-[var(--muted)]"><p>Could not load videos.</p><button type="button" onClick={() => void feed.refetch()} className="mt-2 font-semibold text-[var(--royal)]">Try again</button></div>}
+        {feed.isFetchingNextPage && <p role="status" className="py-5 text-center text-sm text-[var(--muted)]">Loading more videos...</p>}
+        <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
       </div>
     </section>
   );

@@ -34,7 +34,7 @@ import { deleteVideo, getMyVideos, updateVideo, type UpdateVideoPayload } from "
 import type { PaginatedResponse, Video } from "@/types/api";
 import { compactNumber, cx } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 
 type Visibility = Video["visibility"];
 
@@ -51,7 +51,7 @@ const visibilityLabels: Record<Visibility, string> = {
 const emptyPosts: Video[] = [];
 
 export function PostsManager() {
-  const { authenticated, loading: authLoading, token } = useAuth();
+  const { authenticated, loading: authLoading, token, user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [error, setError] = useState("");
@@ -61,15 +61,27 @@ export function PostsManager() {
   const [editing, setEditing] = useState<Video | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const queryClient = useQueryClient();
-  const authScope = token ? "auth" : "guest";
+  const authScope = user?.id ?? "guest";
   const myVideosQueryKey = queryKeys.myVideos(authScope);
-  const postsQuery = useQuery({
+  const postsQuery = useInfiniteQuery({
     enabled: !authLoading && authenticated && Boolean(token),
     queryKey: myVideosQueryKey,
-    queryFn: () => getMyVideos(token as string, 100),
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) => getMyVideos(token as string, 25, pageParam, signal),
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page
+      ? lastPage.meta.current_page + 1
+      : undefined,
     staleTime: 20 * 1000,
   });
-  const posts = postsQuery.data?.data ?? emptyPosts;
+  const posts = useMemo(() => {
+    if (!postsQuery.data) return emptyPosts;
+    const seen = new Set<number>();
+    return postsQuery.data.pages.flatMap((page) => page.data.filter((post) => {
+      if (seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    }));
+  }, [postsQuery.data]);
   const loading = authLoading || postsQuery.isLoading;
 
   const updatePostMutation = useMutation({
@@ -78,8 +90,11 @@ export function PostsManager() {
       return updateVideo(id, payload, token);
     },
     onSuccess: (response, variables) => {
-      queryClient.setQueryData<PaginatedResponse<Video>>(myVideosQueryKey, (current) => current
-        ? { ...current, data: current.data.map((post) => (post.id === variables.id ? response.data : post)) }
+      queryClient.setQueryData<InfiniteData<PaginatedResponse<Video>, number>>(myVideosQueryKey, (current) => current
+        ? { ...current, pages: current.pages.map((page) => ({
+          ...page,
+          data: page.data.map((post) => (post.id === variables.id ? response.data : post)),
+        })) }
         : current);
       setEditing((current) => (current?.id === variables.id ? response.data : current));
     },
@@ -95,9 +110,13 @@ export function PostsManager() {
       return deleteVideo(id, token);
     },
     onSuccess: (_response, id) => {
-      queryClient.setQueryData<PaginatedResponse<Video>>(myVideosQueryKey, (current) => current
-        ? { ...current, data: current.data.filter((post) => post.id !== id) }
+      queryClient.setQueryData<InfiniteData<PaginatedResponse<Video>, number>>(myVideosQueryKey, (current) => current
+        ? { ...current, pages: current.pages.map((page) => ({
+          ...page,
+          data: page.data.filter((post) => post.id !== id),
+        })) }
         : current);
+      void queryClient.invalidateQueries({ queryKey: myVideosQueryKey });
     },
     onError: (caught) => {
       setError(caught instanceof ApiError ? caught.message : "Could not delete post.");
@@ -210,12 +229,16 @@ export function PostsManager() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className={cx("min-w-0 flex-1 bg-transparent outline-none", isDark ? "placeholder:text-violet-100/35" : "placeholder:text-zinc-400")}
-              placeholder="Search for post description"
+              placeholder="Search loaded post descriptions"
             />
           </label>
         </div>
 
-        {(error || postsQuery.isError) && <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error || "Could not load posts."}</div>}
+        {query.trim() && postsQuery.hasNextPage && (
+          <p className={cx("mb-4 text-xs", isDark ? "text-violet-100/52" : "text-zinc-500")}>Search covers loaded posts. Load more to search older posts.</p>
+        )}
+
+        {(error || postsQuery.isError) && <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error || "Could not load posts."}{postsQuery.isError && !posts.length && <button type="button" onClick={() => void postsQuery.refetch()} className="ml-3 underline">Try again</button>}</div>}
 
         <div className={cx("rounded-lg border shadow-sm", isDark ? "border-violet-200/10 bg-white/[0.05]" : "border-zinc-200 bg-white")}>
           <div className={cx("grid min-w-[920px] grid-cols-[minmax(360px,1.8fr)_140px_110px_110px_120px_220px] border-b px-5 py-3 text-xs font-semibold", isDark ? "border-violet-200/10 text-violet-100/52" : "border-zinc-200 text-zinc-500")}>
@@ -272,11 +295,16 @@ export function PostsManager() {
               ))
             ) : (
               <div className={cx("grid h-44 place-items-center px-6 text-center text-sm font-semibold", isDark ? "text-violet-100/52" : "text-zinc-500")}>
-                No posts found.
+                {query.trim() && postsQuery.hasNextPage ? "No matching posts in loaded pages." : "No posts found."}
               </div>
             )}
           </div>
         </div>
+        {postsQuery.hasNextPage && (
+          <button type="button" onClick={() => void postsQuery.fetchNextPage()} disabled={postsQuery.isFetching} className={cx("mx-auto mt-6 block rounded-md border px-6 py-2.5 text-sm font-semibold disabled:opacity-50", isDark ? "border-violet-200/20 text-violet-100 hover:bg-white/10" : "border-zinc-200 text-zinc-900 hover:bg-zinc-50")}>
+            {postsQuery.isFetchingNextPage ? "Loading posts..." : "Load more posts"}
+          </button>
+        )}
       </div>
 
       {editing && (

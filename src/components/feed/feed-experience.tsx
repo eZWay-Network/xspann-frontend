@@ -4,11 +4,10 @@ import { CommentsPanel } from "@/components/comments/comments-panel";
 import { useAuth } from "@/components/common/auth-provider";
 import { ActionRail } from "@/components/video/action-rail";
 import { cx } from "@/lib/format";
-import { videos } from "@/lib/mock-data";
 import { queryKeys } from "@/lib/query-keys";
 import { getFollowingFeedVideos, getFeedVideos, getVideo, recordVideoView } from "@/services/videos";
-import type { Video } from "@/types/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PaginatedResponse, Video } from "@/types/api";
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronUp,
@@ -39,7 +38,7 @@ const progressScale = 1000;
 const emptyVideos: Video[] = [];
 
 export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) {
-  const { loading: authLoading, token } = useAuth();
+  const { loading: authLoading, token, user } = useAuth();
   const searchParams = useSearchParams();
   const feedTab = searchParams.get("tab");
   const [paused, setPaused] = useState(false);
@@ -51,44 +50,51 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const [followingByUserId, setFollowingByUserId] = useState<Record<number, boolean>>({});
   const feedRef = useRef<HTMLElement>(null);
   const viewedVideoIdsRef = useRef<Set<number>>(new Set());
-  const authScope = token ? "auth" : "guest";
+  const authScope = user?.id ?? "guest";
   const feedScope = feedTab === "following" ? "following" : "for-you";
   const feedQueryKey = useMemo(() => queryKeys.feed(feedScope, authScope, initialVideoId), [authScope, feedScope, initialVideoId]);
   const queryClient = useQueryClient();
 
-  const feedQuery = useQuery({
+  const feedQuery = useInfiniteQuery({
     enabled: !authLoading,
     queryKey: feedQueryKey,
-    queryFn: async () => {
+    initialPageParam: 1,
+    queryFn: async ({ pageParam, signal }) => {
       const feedPromise = feedTab === "following" && token
-        ? getFollowingFeedVideos(20, token)
-        : getFeedVideos(20, token);
+        ? getFollowingFeedVideos(20, token, pageParam, signal)
+        : getFeedVideos(20, token, pageParam, signal);
 
-      const selectedPromise = initialVideoId && feedTab !== "following"
+      const selectedPromise = pageParam === 1 && initialVideoId && feedTab !== "following"
         ? getVideo(initialVideoId, token).then((response) => response.data).catch(() => null)
         : Promise.resolve(null);
 
       const [feedResponse, selectedVideo] = await Promise.all([feedPromise, selectedPromise]);
 
       if (!selectedVideo) {
-        return feedResponse.data;
+        return feedResponse;
       }
 
-      return [
-        selectedVideo,
-        ...feedResponse.data.filter((video) => video.id !== selectedVideo.id),
-      ];
+      return {
+        ...feedResponse,
+        data: [selectedVideo, ...feedResponse.data.filter((video) => video.id !== selectedVideo.id)],
+      };
     },
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page
+      ? lastPage.meta.current_page + 1
+      : undefined,
     staleTime: 30 * 1000,
   });
+  const { hasNextPage, isFetching, isError: feedIsError, fetchNextPage } = feedQuery;
 
-  const baseFeedVideos = feedQuery.isError
-    ? videos
-    : feedQuery.data
-      ? feedQuery.data.length
-        ? feedQuery.data
-        : videos
-      : emptyVideos;
+  const baseFeedVideos = useMemo(() => {
+    if (!feedQuery.data) return emptyVideos;
+    const seen = new Set<number>();
+    return feedQuery.data.pages.flatMap((page) => page.data.filter((video) => {
+      if (seen.has(video.id)) return false;
+      seen.add(video.id);
+      return true;
+    }));
+  }, [feedQuery.data]);
   const feedVideos = useMemo(() => baseFeedVideos.map((video) => ({
     ...video,
     stats: {
@@ -154,9 +160,17 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       const sourceCount = current[videoId] ?? baseFeedVideos.find((video) => video.id === videoId)?.stats.comments ?? 0;
       return { ...current, [videoId]: Math.max(0, sourceCount + delta) };
     });
-    queryClient.setQueryData<Video[]>(feedQueryKey, (current) => current?.map((video) => video.id === videoId
-      ? { ...video, stats: { ...video.stats, comments: Math.max(0, video.stats.comments + delta) } }
-      : video));
+    queryClient.setQueryData<InfiniteData<PaginatedResponse<Video>, number>>(feedQueryKey, (current) => current
+      ? {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          data: page.data.map((video) => video.id === videoId
+            ? { ...video, stats: { ...video.stats, comments: Math.max(0, video.stats.comments + delta) } }
+            : video),
+        })),
+      }
+      : current);
   }, [baseFeedVideos, feedQueryKey, queryClient]);
 
   const activeVideoIndex = effectiveActiveVideoId
@@ -165,6 +179,11 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const activeVideo = activeVideoIndex >= 0 ? feedVideos[activeVideoIndex] : null;
   const canGoPrevious = activeVideoIndex > 0;
   const canGoNext = activeVideoIndex >= 0 && activeVideoIndex < feedVideos.length - 1;
+
+  useEffect(() => {
+    if (activeVideoIndex < 0 || activeVideoIndex < feedVideos.length - 4) return;
+    if (hasNextPage && !isFetching && !feedIsError) void fetchNextPage();
+  }, [activeVideoIndex, feedVideos.length, hasNextPage, isFetching, feedIsError, fetchNextPage]);
 
   const scrollToVideo = useCallback((direction: "previous" | "next") => {
     const feed = feedRef.current;
@@ -219,6 +238,15 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
             Loading videos...
           </div>
         )}
+        {feedQuery.isError && !feedVideos.length && (
+          <div role="alert" className="grid h-full place-content-center gap-3 text-center text-sm text-[var(--muted)]">
+            <p>Could not load videos.</p>
+            <button type="button" onClick={() => void feedQuery.refetch()} className="font-semibold text-[var(--royal)]">Try again</button>
+          </div>
+        )}
+        {!feedQuery.isPending && !feedQuery.isError && !feedVideos.length && (
+          <div className="grid h-full place-items-center text-sm text-[var(--muted)]">No videos yet.</div>
+        )}
 
         {(!feedQuery.isPending || Boolean(feedVideos.length)) &&
           feedVideos.map((video, index) => (
@@ -230,16 +258,20 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
               <div className="feed-stage">
                 <div className="feed-presentation">
                 <div className="video-frame">
-                  <VideoPlayer
-                    video={video}
-                    paused={paused}
-                    muted={muted}
-                    isActive={video.id === effectiveActiveVideoId}
-                    priority={video.id === feedVideos[0]?.id}
-                    shouldPreload={index >= activeVideoIndex && index <= activeVideoIndex + 1}
-                    onTogglePaused={() => setPaused((value) => !value)}
-                    onToggleMuted={() => setMuted((value) => !value)}
-                  />
+                  {Math.abs(index - activeVideoIndex) <= 2 ? (
+                    <VideoPlayer
+                      video={video}
+                      paused={paused}
+                      muted={muted}
+                      isActive={video.id === effectiveActiveVideoId}
+                      priority={video.id === feedVideos[0]?.id}
+                      shouldPreload={index >= activeVideoIndex && index <= activeVideoIndex + 1}
+                      onTogglePaused={() => setPaused((value) => !value)}
+                      onToggleMuted={() => setMuted((value) => !value)}
+                    />
+                  ) : (
+                    <Image src={video.thumbnail_url ?? fallbackPoster} alt="" fill sizes="(max-width: 768px) 100vw, 526px" className="object-cover" />
+                  )}
                   <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.03),rgba(0,0,0,0.04)_48%,rgba(0,0,0,0.66))]" />
 
                   <div className="pointer-events-none absolute bottom-14 left-0 right-16 z-20 p-4 text-white sm:right-0 sm:p-5 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
@@ -280,6 +312,12 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
               </div>
             </article>
           ))}
+        {feedVideos.length > 0 && feedQuery.isFetchingNextPage && (
+          <p role="status" className="py-3 text-center text-sm text-[var(--muted)]">Loading more videos...</p>
+        )}
+        {feedVideos.length > 0 && feedQuery.isError && feedQuery.hasNextPage && (
+          <button type="button" onClick={() => void feedQuery.fetchNextPage()} className="mx-auto block py-3 text-sm font-semibold text-[var(--royal)]">Retry loading videos</button>
+        )}
       </section>
 
       <div className="fixed right-7 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center gap-3 xl:flex">

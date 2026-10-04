@@ -14,12 +14,18 @@ export function getVideo(id: number, token?: string | null) {
   return apiRequest<SingleResponse<Video>>(`/videos/${id}`, { token });
 }
 
-export function getFeedVideos(limit = 10, token?: string | null) {
-  return apiRequest<PaginatedResponse<Video>>(`/feed?limit=${limit}`, { token });
+export function getFeedVideos(limit = 10, token?: string | null, page = 1, signal?: AbortSignal) {
+  return apiRequest<PaginatedResponse<Video>>(`/feed?page=${page}&limit=${limit}`, { token, signal });
 }
 
-export function getFollowingFeedVideos(limit = 10, token: string) {
-  return apiRequest<PaginatedResponse<Video>>(`/feed/following?limit=${limit}`, { token });
+export function getFollowingFeedVideos(limit = 10, token: string, page = 1, signal?: AbortSignal) {
+  return apiRequest<PaginatedResponse<Video>>(`/feed/following?page=${page}&limit=${limit}`, { token, signal });
+}
+
+export function getDiscoverVideos(query: string, page = 1, limit = 20, token?: string | null, signal?: AbortSignal) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit), sort: "popular" });
+  if (query) params.set("q", query);
+  return apiRequest<PaginatedResponse<Video>>(`/discover?${params}`, { token, signal });
 }
 
 export type CreateVideoPayload = {
@@ -70,8 +76,8 @@ export function createVideo(payload: CreateVideoPayload, token: string) {
   });
 }
 
-export function getMyVideos(token: string, limit = 50) {
-  return apiRequest<PaginatedResponse<Video>>(`/me/videos?limit=${limit}`, { token });
+export function getMyVideos(token: string, limit = 50, page = 1, signal?: AbortSignal) {
+  return apiRequest<PaginatedResponse<Video>>(`/me/videos?page=${page}&limit=${limit}`, { token, signal });
 }
 
 export function updateVideo(id: number, payload: UpdateVideoPayload, token: string) {
