@@ -98,7 +98,12 @@ export type Comment = {
   body: string;
   user: UserSummary;
   created_at: string;
+  replies_count: number;
+  reactions: Record<CommentReactionType, number>;
+  viewer_reaction: CommentReactionType | null;
 };
+
+export type CommentReactionType = "like" | "love" | "haha" | "wow" | "sad" | "angry";
 
 export type UploadSignedResponse = {
   upload_method: "signed_url";

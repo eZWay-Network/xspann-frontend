@@ -1,6 +1,7 @@
 export const queryKeys = {
   notifications: (userId: number) => ["notifications", userId] as const,
-  comments: (videoId: number) => ["comments", videoId] as const,
+  comments: (videoId: number, userId = 0) => ["comments", videoId, userId] as const,
+  commentReplies: (parentId: number, userId = 0) => ["comment-replies", parentId, userId] as const,
   feed: (scope: "for-you" | "following", authScope: "auth" | "guest", initialVideoId?: number) =>
     ["feed", scope, authScope, initialVideoId ?? null] as const,
   likedVideos: (authScope: "auth" | "guest") => ["liked-videos", authScope] as const,
