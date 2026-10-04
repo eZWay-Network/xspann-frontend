@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, ListVideo, Plus, UserRound, UserRoundPlus } from "lucide-react";
+import { Bell, Compass, Home, ListVideo, Plus, UserRound, UserRoundPlus } from "lucide-react";
 import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
 import { useAuth } from "@/components/common/auth-provider";
 import { cx } from "@/lib/format";
@@ -13,6 +13,7 @@ export function BottomNav() {
   const profileHref = authenticated && user ? `/profile/${user.username}` : "/login";
   const items = [
     { label: "Home", href: "/feed", icon: Home },
+    { label: "Discover", href: "/search", icon: Compass },
     { label: "Following", href: "/following", icon: UserRoundPlus },
     { label: "Create", href: "/upload", icon: Plus },
     { label: "Posts", href: "/posts", icon: ListVideo },
@@ -21,7 +22,7 @@ export function BottomNav() {
   ];
 
   return (
-    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-[var(--line)] bg-[var(--background)] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-[var(--line)] bg-[var(--background)] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] md:hidden">
       {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (

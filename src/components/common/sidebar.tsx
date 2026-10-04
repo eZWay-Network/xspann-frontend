@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Ellipsis,
   Bell,
+  Compass,
   HelpCircle,
   Home,
   ListVideo,
@@ -37,6 +38,7 @@ import { cx } from "@/lib/format";
 
 const baseNav = [
   { label: "For You", href: "/feed", icon: Home },
+  { label: "Discover", href: "/search", icon: Compass },
   { label: "Following", href: "/following", icon: UserRoundPlus },
   { label: "Activity", href: "/activity", icon: Bell },
   // {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   HelpCircle,
   Bell,
+  Compass,
   Home,
   ListVideo,
   LogIn,
@@ -87,6 +88,7 @@ function MobileMenu({
 }) {
   const navItems = [
     { label: "For You", href: "/feed", icon: Home },
+    { label: "Discover", href: "/search", icon: Compass },
     { label: "Following", href: "/following", icon: UserRoundPlus },
     { label: "Activity", href: "/activity", icon: Bell },
     { label: "Upload", href: "/upload", icon: PlusSquare },
