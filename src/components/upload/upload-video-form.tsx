@@ -77,6 +77,7 @@ export function UploadVideoForm() {
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const submittingRef = useRef(false);
   const { authenticated, loading, token, user } = useAuth();
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -128,6 +129,7 @@ export function UploadVideoForm() {
   const videoFilter = buildVideoFilter(filters);
 
   function chooseFile(nextFile: File | undefined) {
+    if (submittingRef.current) return;
     setError("");
     setCreatedVideoId(null);
 
@@ -144,6 +146,7 @@ export function UploadVideoForm() {
     }
 
     pausePreview();
+    setStep("idle");
     setFile(nextFile);
     setCaption(nextFile.name.replace(/\.[^/.]+$/, ""));
     setPreviewTime(0);
@@ -151,10 +154,7 @@ export function UploadVideoForm() {
     setTrimEnd(0);
     setCropMode("fill");
     setFilters(defaultFilters);
-    setPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return URL.createObjectURL(nextFile);
-    });
+    setPreviewUrl(URL.createObjectURL(nextFile));
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -273,10 +273,7 @@ export function UploadVideoForm() {
 
     pausePreview();
     setCustomAudioFile(nextFile);
-    setCustomAudioPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return audioUrl;
-    });
+    setCustomAudioPreviewUrl(audioUrl);
     setSelectedSound(track);
     setPlayingSoundId(null);
   }
@@ -325,6 +322,8 @@ export function UploadVideoForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (submittingRef.current || step === "done") return;
+
     if (!token) {
       setError("Please login before publishing.");
       return;
@@ -335,6 +334,7 @@ export function UploadVideoForm() {
       return;
     }
 
+    submittingRef.current = true;
     try {
       pausePreview();
       setError("");
@@ -388,6 +388,7 @@ export function UploadVideoForm() {
         filter_settings: filters,
       }, token);
 
+      clearFile();
       setCreatedVideoId(video.data.id);
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["my-videos"] });
@@ -405,23 +406,37 @@ export function UploadVideoForm() {
       } else {
         setError("Upload failed. Please try again.");
       }
+    } finally {
+      submittingRef.current = false;
     }
   }
 
   function clearFile() {
     pausePreview();
+    audioRef.current?.removeAttribute("src");
     setCreatedVideoId(null);
+    setError("");
     setDuration(0);
     setPreviewTime(0);
     setTrimStart(0);
     setTrimEnd(0);
     setCropMode("fill");
     setFilters(defaultFilters);
+    setCaption("");
+    setVisibility("public");
+    setHighQuality(true);
+    setPreviewMode("feed");
+    setSoundQuery("lofi");
+    setSoundResults(fallbackTracks);
+    setSelectedSound(fallbackTracks[0]);
+    setCustomAudioFile(null);
+    setCustomAudioPreviewUrl(null);
+    setPlayingSoundId(null);
+    setTrimEditorOpen(false);
+    setSoundEditorOpen(false);
+    setFilterEditorOpen(false);
     setFile(null);
-    setPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return null;
-    });
+    setPreviewUrl(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -458,8 +473,8 @@ export function UploadVideoForm() {
               </p>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => inputRef.current?.click()} className="h-9 rounded-md bg-zinc-100 px-4 text-sm font-bold hover:bg-zinc-200">{file ? "Replace" : "Choose file"}</button>
-              {file && <button type="button" onClick={clearFile} className="grid h-9 w-9 place-items-center rounded-md bg-zinc-100 text-zinc-700 hover:bg-zinc-200" aria-label="Remove selected video"><X size={17} /></button>}
+              <button type="button" onClick={() => inputRef.current?.click()} disabled={submitting} className="h-9 rounded-md bg-zinc-100 px-4 text-sm font-bold hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-65">{file ? "Replace" : "Choose file"}</button>
+              {file && <button type="button" onClick={clearFile} disabled={submitting} className="grid h-9 w-9 place-items-center rounded-md bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-65" aria-label="Remove selected video"><X size={17} /></button>}
             </div>
           </div>
           {file && <div className="mt-4 h-1 rounded-full bg-emerald-400" />}
@@ -503,7 +518,7 @@ export function UploadVideoForm() {
           <aside className="mx-auto w-full max-w-[330px] xl:sticky xl:top-5 xl:h-fit xl:max-w-none">
             <div className="mb-3 grid grid-cols-[1fr_1fr_1fr_36px] rounded-md bg-zinc-200/70 p-1 text-xs font-bold">
               {(["feed", "profile", "web"] as PreviewMode[]).map((mode) => <button key={mode} type="button" onClick={() => setPreviewMode(mode)} className={cx("h-7 rounded capitalize", previewMode === mode && "bg-white shadow-sm")}>{mode}</button>)}
-              <button type="button" onClick={() => inputRef.current?.click()} className="grid h-7 place-items-center rounded bg-white text-zinc-700 shadow-sm" aria-label="Replace video"><FileVideo size={15} /></button>
+              <button type="button" onClick={() => inputRef.current?.click()} disabled={submitting} className="grid h-7 place-items-center rounded bg-white text-zinc-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-65" aria-label="Replace video"><FileVideo size={15} /></button>
             </div>
 
             <div className="mx-auto mb-4 w-[min(290px,calc(100vw-32px))] rounded-[32px] border-2 border-zinc-950 bg-zinc-950 p-2 shadow-xl">
@@ -568,11 +583,11 @@ export function UploadVideoForm() {
               <ToolLauncher icon={<SlidersHorizontal size={20} />} label="Filters" onClick={() => { pausePreview(); setFilterEditorOpen(true); }} disabled={!previewUrl} />
             </div>
 
-            {createdVideoId && <Status tone="success" text={`Video #${createdVideoId} published and queued for processing.`} />}
+            {createdVideoId && <Status tone="success" text="Your video has been published! It may take a moment to appear." />}
             {error && <Status tone="error" text={error} />}
             {submitting && <Progress step={step} />}
 
-            <button disabled={submitting} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
+            <button type="submit" disabled={submitting || !file || step === "done"} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
               {submitting && <LoaderCircle size={18} className="animate-spin" />}
               {submitting ? stepLabel(step) : "Publish"}
             </button>
