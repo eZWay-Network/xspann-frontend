@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Check, Code2, Heart, Link2, MessageCircle, Plus, Send, Share2, X } from "lucide-react";
+import { Bookmark, Check, Code2, Heart, Link2, MessageCircle, Plus, Send, X } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -205,7 +205,7 @@ export function ActionRail({
       <ActionButton label={compactNumber(likes)} name={liked ? "Unlike video" : "Like video"} kind="like" active={liked} onClick={() => void toggleLike()} icon={<Heart size={25} strokeWidth={1.8} fill={liked ? "currentColor" : "none"} />} />
       <ActionButton label={compactNumber(video.stats.comments)} name="Open comments" onClick={onComments} icon={<MessageCircle size={25} strokeWidth={1.8} />} />
       <ActionButton label={compactNumber(saves)} name={saved ? "Unsave video" : "Save video"} active={saved} onClick={() => void toggleSave()} icon={<Bookmark size={25} strokeWidth={1.8} fill={saved ? "currentColor" : "none"} />} />
-      <ActionButton label={compactNumber(shares)} name="Share video" onClick={() => setShareOpen(true)} icon={<Share2 size={24} strokeWidth={1.8} />} />
+      <ActionButton label={compactNumber(shares)} name="Share video" onClick={() => setShareOpen(true)} icon={<TikTokShareIcon />} />
       {shareOpen && (
         <ShareSheet
           video={video}
@@ -303,5 +303,19 @@ function ActionButton({ icon, label, name, kind, active, onClick }: { icon: Reac
       <span className="feed-action-icon" data-active={active} data-kind={kind}>{icon}</span>
       <span className="text-[11px] font-semibold tabular-nums text-[var(--muted)] max-sm:text-white">{label}</span>
     </button>
+  );
+}
+
+function TikTokShareIcon() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path
+        d="M18 6.8 28 16l-10 9.2v-5.3C11.5 19.9 6.8 22 3.8 25.3 5 17.2 9.8 12.6 18 12.6V6.8Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
