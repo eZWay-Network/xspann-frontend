@@ -1,4 +1,5 @@
 export const queryKeys = {
+  blockedUsers: (userId: number) => ["blocked-users", userId] as const,
   notifications: (userId: number) => ["notifications", userId] as const,
   comments: (videoId: number, userId = 0) => ["comments", videoId, userId] as const,
   commentReplies: (parentId: number, userId = 0) => ["comment-replies", parentId, userId] as const,

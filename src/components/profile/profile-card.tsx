@@ -24,6 +24,7 @@ import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
 import { XpnLoader } from "@/components/common/xpn-loader";
+import { ProfileSafetyActions } from "@/components/profile/profile-safety-actions";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,7 @@ export function ProfileCard({ username }: { username: string }) {
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [followLoading, setFollowLoading] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
+  const [blockedByViewer, setBlockedByViewer] = useState(false);
   const [relationPanel, setRelationPanel] = useState<"followers" | "following" | null>(null);
   const [relationUsers, setRelationUsers] = useState<UserSummary[]>([]);
   const [relationLoading, setRelationLoading] = useState(false);
@@ -275,7 +277,10 @@ export function ProfileCard({ username }: { username: string }) {
       : likedVideos;
   const sortedVideos = sortProfileVideos(tabVideos, sortMode);
   const privateTabLocked = activeTab !== "videos" && !isOwnProfile;
-  const emptyMessage = privateTabLocked
+  const profileContentHidden = blockedByViewer || privateTabLocked;
+  const emptyMessage = blockedByViewer
+    ? `You blocked @${profile.username}. Unblock this account to see its posts.`
+    : privateTabLocked
     ? `${activeTab === "favorites" ? "Favorites" : "Liked videos"} are private.`
     : activeTab === "videos"
       ? "No visible posts yet."
@@ -379,25 +384,45 @@ export function ProfileCard({ username }: { username: string }) {
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => void toggleFollow()}
-                disabled={!authenticated || followLoading}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                {followLoading ? (
-                  <LoaderCircle className="animate-spin" size={17} />
-                ) : profile.following ? (
-                  <UserCheck size={17} />
-                ) : (
-                  <UserPlus size={17} />
-                )}
-                {authenticated
-                  ? profile.following
-                    ? "Following"
-                    : "Follow"
-                  : "Log in to follow"}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void toggleFollow()}
+                  disabled={!authenticated || followLoading || blockedByViewer}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {followLoading ? (
+                    <LoaderCircle className="animate-spin" size={17} />
+                  ) : profile.following ? (
+                    <UserCheck size={17} />
+                  ) : (
+                    <UserPlus size={17} />
+                  )}
+                  {blockedByViewer
+                    ? "Blocked"
+                    : authenticated
+                      ? profile.following
+                        ? "Following"
+                        : "Follow"
+                      : "Log in to follow"}
+                </button>
+                <ProfileSafetyActions
+                  profile={profile}
+                  token={token}
+                  authenticated={authenticated}
+                  blocked={blockedByViewer}
+                  onBlockedChange={(blocked) => {
+                    if (blocked && profile.following) {
+                      setCachedProfile((current) => ({
+                        ...current,
+                        following: false,
+                        followers_count: Math.max(0, current.followers_count - 1),
+                      }));
+                    }
+                    setBlockedByViewer(blocked);
+                  }}
+                />
+              </div>
             )}
           </div>
           {followError && (
@@ -442,7 +467,7 @@ export function ProfileCard({ username }: { username: string }) {
           </div>
         </Tabs>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
-          {!privateTabLocked && sortedVideos.map((video) => (
+          {!profileContentHidden && sortedVideos.map((video) => (
             <Link
               key={video.id}
               href={`/video/${video.id}`}
@@ -476,7 +501,7 @@ export function ProfileCard({ username }: { username: string }) {
               </div>
             </Link>
           ))}
-          {(privateTabLocked || !sortedVideos.length) && (
+          {(profileContentHidden || !sortedVideos.length) && (
             <div className={cx("col-span-full rounded-lg border px-5 py-10 text-center text-sm font-semibold", isDark ? "border-violet-200/10 bg-white/[0.04] text-violet-100/65" : "border-violet-200 bg-white text-zinc-500")}>
               {emptyMessage}
             </div>
