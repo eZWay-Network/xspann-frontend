@@ -60,6 +60,7 @@ export function ProfileCard({ username }: { username: string }) {
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [followLoading, setFollowLoading] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [blockedByViewer, setBlockedByViewer] = useState(false);
   const [relationPanel, setRelationPanel] = useState<"followers" | "following" | null>(null);
   const [relationUsers, setRelationUsers] = useState<UserSummary[]>([]);
@@ -188,6 +189,36 @@ export function ProfileCard({ username }: { username: string }) {
     setEditFieldErrors({});
     setEditAvatarPreview("");
     setEditingProfile(true);
+  };
+
+  const shareProfile = async () => {
+    if (!profile) return;
+
+    const shareUrl = `${window.location.origin}/profile/${profile.username}`;
+    const shareData = {
+      title: `@${profile.username} on XPN`,
+      text: profile.bio?.trim() || `View @${profile.username}'s profile on XPN.`,
+      url: shareUrl,
+    };
+
+    setShareStatus(null);
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShareStatus({ type: "success", message: "Profile shared." });
+        return;
+      } catch (caughtError) {
+        if (caughtError instanceof DOMException && caughtError.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus({ type: "success", message: "Profile link copied." });
+    } catch {
+      setShareStatus({ type: "error", message: "Could not share this profile." });
+    }
   };
 
   const submitEditProfile = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -368,15 +399,16 @@ export function ProfileCard({ username }: { username: string }) {
                   <Pencil size={16} />
                   Edit profile
                 </button>
-                <button
-                  type="button"
+                <Link
+                  href="/settings"
                   className={cx("grid h-11 w-11 place-items-center rounded-full ring-1 transition", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-violet-50 text-violet-950 ring-violet-200 hover:bg-violet-100")}
                   aria-label="Profile settings"
                 >
                   <Settings size={18} />
-                </button>
+                </Link>
                 <button
                   type="button"
+                  onClick={() => void shareProfile()}
                   className={cx("grid h-11 w-11 place-items-center rounded-full ring-1 transition", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-violet-50 text-violet-950 ring-violet-200 hover:bg-violet-100")}
                   aria-label="Share profile"
                 >
@@ -428,6 +460,23 @@ export function ProfileCard({ username }: { username: string }) {
           {followError && (
             <p className={cx("mt-4 rounded-md border border-pink-400/20 bg-pink-500/10 px-3 py-2 text-sm font-medium", isDark ? "text-pink-100" : "text-pink-700")}>
               {followError}
+            </p>
+          )}
+          {shareStatus && (
+            <p
+              role="status"
+              className={cx(
+                "mt-4 rounded-md border px-3 py-2 text-sm font-medium",
+                shareStatus.type === "success"
+                  ? isDark
+                    ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : isDark
+                    ? "border-pink-400/20 bg-pink-500/10 text-pink-100"
+                    : "border-pink-200 bg-pink-50 text-pink-700",
+              )}
+            >
+              {shareStatus.message}
             </p>
           )}
         </div>
