@@ -5,10 +5,15 @@ import { AppShell } from "@/components/common/app-shell";
 import { ProtectedRoute } from "@/components/common/protected-route";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
+import { UserAvatar } from "@/components/common/user-avatar";
 import { ApiError } from "@/services/api";
 import { changePassword, forgotPassword, resendVerificationEmail } from "@/services/auth";
+import { getBlockedUsers, unblockUser } from "@/services/safety";
 import { cx } from "@/lib/format";
-import { AtSign, ChevronRight, KeyRound, LoaderCircle, ShieldCheck, UserRound } from "lucide-react";
+import { queryKeys } from "@/lib/query-keys";
+import type { PaginatedResponse, UserSummary } from "@/types/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AtSign, Ban, ChevronRight, KeyRound, LoaderCircle, ShieldCheck, UserRound } from "lucide-react";
 
 export default function SettingsPage() {
   return (
@@ -23,7 +28,9 @@ export default function SettingsPage() {
 function SettingsContent() {
   const { theme } = useTheme();
   const { token, user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
   const isDark = theme === "dark";
+  const [activeSection, setActiveSection] = useState<"account" | "blocked">("account");
   const [passwordDraft, setPasswordDraft] = useState({
     current_password: "",
     password: "",
@@ -33,6 +40,15 @@ function SettingsContent() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState<"verify" | "forgot" | "password" | null>(null);
+  const [unblockingId, setUnblockingId] = useState<number | null>(null);
+  const [blockedError, setBlockedError] = useState("");
+  const blockedUsersQuery = useQuery({
+    enabled: Boolean(token && user?.id && activeSection === "blocked"),
+    queryKey: queryKeys.blockedUsers(user?.id ?? 0),
+    queryFn: () => getBlockedUsers(token as string),
+    staleTime: 30 * 1000,
+  });
+  const blockedUsers = blockedUsersQuery.data?.data ?? [];
 
   const panelClass = isDark
     ? "border-violet-200/10 bg-[#151515]/92 text-white"
@@ -98,15 +114,57 @@ function SettingsContent() {
     setPasswordDraft((current) => ({ ...current, [name]: value }));
   }
 
+  async function handleUnblock(blockedUser: UserSummary) {
+    if (!token || !user) return;
+
+    setUnblockingId(blockedUser.id);
+    setBlockedError("");
+
+    try {
+      await unblockUser(blockedUser.id, token);
+      queryClient.setQueryData<PaginatedResponse<UserSummary>>(
+        queryKeys.blockedUsers(user.id),
+        (current) => current
+          ? {
+              ...current,
+              data: current.data.filter((person) => person.id !== blockedUser.id),
+              meta: { ...current.meta, total: Math.max(0, current.meta.total - 1) },
+            }
+          : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-videos"] });
+      void queryClient.invalidateQueries({ queryKey: ["profile", blockedUser.username] });
+    } catch (caughtError) {
+      setBlockedError(caughtError instanceof ApiError ? caughtError.message : "Could not unblock this account.");
+    } finally {
+      setUnblockingId(null);
+    }
+  }
+
   return (
     <section className={cx("page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8", isDark ? "text-white" : "text-zinc-950")}>
       <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[356px_1fr]">
         <aside className={cx("rounded-lg border p-4", panelClass)}>
-          <SettingsNavItem active icon={UserRound} label="Manage account" isDark={isDark} />
-          <SettingsNavItem icon={ShieldCheck} label="Security" isDark={isDark} />
+          <SettingsNavItem
+            active={activeSection === "account"}
+            icon={UserRound}
+            label="Manage account"
+            isDark={isDark}
+            onSelect={() => setActiveSection("account")}
+          />
+          <SettingsNavItem
+            active={activeSection === "blocked"}
+            icon={ShieldCheck}
+            label="Blocked accounts"
+            isDark={isDark}
+            onSelect={() => setActiveSection("blocked")}
+          />
         </aside>
 
         <div className={cx("rounded-lg border px-6 py-7", panelClass)}>
+          {activeSection === "account" ? (
+            <>
           <h1 className="text-2xl font-semibold tracking-tight">Manage account</h1>
 
           <section className={cx("mt-7 border-b pb-6", rowBorderClass)}>
@@ -196,6 +254,65 @@ function SettingsContent() {
               </button>
             </form>
           </section>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start gap-3">
+                <span className={cx("mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full", isDark ? "bg-white/[0.07] text-violet-200" : "bg-violet-50 text-violet-700")}>
+                  <Ban size={19} />
+                </span>
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight">Blocked accounts</h1>
+                  <p className={cx("mt-2 max-w-2xl text-sm leading-6", mutedClass)}>
+                    Blocked accounts cannot find your profile or interact with you. Unblocking does not restore previous follows.
+                  </p>
+                </div>
+              </div>
+
+              <section className="mt-7">
+                <div className="grid gap-2">
+                  {blockedUsersQuery.isLoading && (
+                    <div className={cx("flex items-center gap-2 rounded-lg border px-4 py-4 text-sm font-semibold", rowBorderClass, mutedClass)}>
+                      <LoaderCircle className="animate-spin" size={16} />
+                      Loading blocked accounts...
+                    </div>
+                  )}
+
+                  {blockedUsersQuery.isError && (
+                    <div className="flex flex-col items-start gap-3 rounded-lg border border-rose-400/25 bg-rose-500/10 px-4 py-4 text-sm font-medium text-rose-500 sm:flex-row sm:items-center sm:justify-between">
+                      <span>Could not load blocked accounts.</span>
+                      <button type="button" onClick={() => void blockedUsersQuery.refetch()} className="font-bold underline underline-offset-4">Try again</button>
+                    </div>
+                  )}
+
+                  {!blockedUsersQuery.isLoading && !blockedUsersQuery.isError && blockedUsers.map((blockedUser) => (
+                    <div key={blockedUser.id} className={cx("flex items-center gap-3 rounded-lg border p-3", rowBorderClass, isDark ? "bg-white/[0.03]" : "bg-zinc-50")}>
+                      <UserAvatar src={blockedUser.avatar} size={44} className="h-11 w-11" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold">@{blockedUser.username}</p>
+                        {blockedUser.name && blockedUser.name !== blockedUser.username && <p className={cx("truncate text-sm", mutedClass)}>{blockedUser.name}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleUnblock(blockedUser)}
+                        disabled={unblockingId === blockedUser.id}
+                        className={cx("inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition disabled:opacity-50", isDark ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12]" : "border-zinc-200 bg-white hover:bg-violet-50")}
+                      >
+                        {unblockingId === blockedUser.id && <LoaderCircle className="animate-spin" size={14} />}
+                        Unblock
+                      </button>
+                    </div>
+                  ))}
+
+                  {!blockedUsersQuery.isLoading && !blockedUsersQuery.isError && !blockedUsers.length && (
+                    <p className={cx("rounded-lg border px-4 py-10 text-center text-sm font-semibold", rowBorderClass, mutedClass)}>You have not blocked any accounts.</p>
+                  )}
+
+                  {blockedError && <p className="rounded-md border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-500">{blockedError}</p>}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       </div>
     </section>
@@ -207,16 +324,21 @@ function SettingsNavItem({
   icon: Icon,
   label,
   isDark,
+  onSelect,
 }: {
   active?: boolean;
   icon: typeof UserRound;
   label: string;
   isDark: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-current={active ? "page" : undefined}
       className={cx(
-        "flex items-center justify-between rounded-md px-4 py-3 text-base font-bold transition",
+        "flex w-full items-center justify-between rounded-md px-4 py-3 text-left text-base font-bold transition",
         active
           ? isDark
             ? "text-[var(--royal-soft)]"
@@ -231,7 +353,7 @@ function SettingsNavItem({
         {label}
       </span>
       {!active && <ChevronRight size={16} />}
-    </div>
+    </button>
   );
 }
 

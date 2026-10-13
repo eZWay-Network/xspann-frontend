@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Ellipsis,
+  Bell,
+  Compass,
   HelpCircle,
   Home,
   ListVideo,
@@ -22,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { Logo } from "@/components/common/logo";
+import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import {
@@ -35,7 +38,9 @@ import { cx } from "@/lib/format";
 
 const baseNav = [
   { label: "For You", href: "/feed", icon: Home },
+  { label: "Discover", href: "/search", icon: Compass },
   { label: "Following", href: "/following", icon: UserRoundPlus },
+  { label: "Activity", href: "/activity", icon: Bell },
   // {
   //   label: "Short dramas",
   //   href: "/feed?tab=dramas",
@@ -135,6 +140,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {!collapsed && (
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               )}
+              {item.label === "Activity" && <span className={collapsed ? "absolute right-2 top-1" : undefined}><ActivityUnreadDot /></span>}
             </Link>
           );
         })}

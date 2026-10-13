@@ -9,6 +9,7 @@ import {
   getStoredTokenExpiresAt,
   getStoredToken,
   login as loginRequest,
+  loginWithGoogle as loginWithGoogleRequest,
   logout as logoutRequest,
   register as registerRequest,
   refreshToken as refreshTokenRequest,
@@ -33,6 +34,7 @@ type AuthContextValue = {
   loading: boolean;
   authenticated: boolean;
   login: (credentials: AuthCredentials) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -153,6 +155,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(response.data.token, response.data.user, response.data.token_expires_at);
   }, [setSession]);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const response = await loginWithGoogleRequest(idToken);
+    setSession(response.data.token, response.data.user, response.data.token_expires_at);
+  }, [setSession]);
+
   const register = useCallback(async (credentials: RegisterCredentials) => {
     const response = await registerRequest(credentials);
     setSession(response.data.token, response.data.user, response.data.token_expires_at);
@@ -174,10 +181,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     authenticated: Boolean(user && token),
     login,
+    loginWithGoogle,
     register,
     logout,
     refreshUser,
-  }), [loading, login, logout, refreshUser, register, token, user]);
+  }), [loading, login, loginWithGoogle, logout, refreshUser, register, token, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -124,6 +124,9 @@ export const comments: Comment[] = [
     body: "This color grade is clean.",
     user: creators[1],
     created_at: "2m ago",
+    replies_count: 0,
+    reactions: { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
+    viewer_reaction: null,
   },
   {
     id: 2,
@@ -132,6 +135,9 @@ export const comments: Comment[] = [
     body: "Royal purple theme fits XPN social so well.",
     user: creators[3],
     created_at: "8m ago",
+    replies_count: 0,
+    reactions: { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
+    viewer_reaction: null,
   },
   {
     id: 3,
@@ -140,6 +146,9 @@ export const comments: Comment[] = [
     body: "Saved for my next upload inspiration.",
     user: currentUser,
     created_at: "12m ago",
+    replies_count: 0,
+    reactions: { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
+    viewer_reaction: null,
   },
 ];
 

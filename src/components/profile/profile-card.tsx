@@ -23,6 +23,8 @@ import {
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
+import { XpnLoader } from "@/components/common/xpn-loader";
+import { ProfileSafetyActions } from "@/components/profile/profile-safety-actions";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +60,8 @@ export function ProfileCard({ username }: { username: string }) {
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [followLoading, setFollowLoading] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [blockedByViewer, setBlockedByViewer] = useState(false);
   const [relationPanel, setRelationPanel] = useState<"followers" | "following" | null>(null);
   const [relationUsers, setRelationUsers] = useState<UserSummary[]>([]);
   const [relationLoading, setRelationLoading] = useState(false);
@@ -187,6 +191,36 @@ export function ProfileCard({ username }: { username: string }) {
     setEditingProfile(true);
   };
 
+  const shareProfile = async () => {
+    if (!profile) return;
+
+    const shareUrl = `${window.location.origin}/profile/${profile.username}`;
+    const shareData = {
+      title: `@${profile.username} on XPN`,
+      text: profile.bio?.trim() || `View @${profile.username}'s profile on XPN.`,
+      url: shareUrl,
+    };
+
+    setShareStatus(null);
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShareStatus({ type: "success", message: "Profile shared." });
+        return;
+      } catch (caughtError) {
+        if (caughtError instanceof DOMException && caughtError.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus({ type: "success", message: "Profile link copied." });
+    } catch {
+      setShareStatus({ type: "error", message: "Could not share this profile." });
+    }
+  };
+
   const submitEditProfile = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!profile || !token) return;
@@ -250,9 +284,7 @@ export function ProfileCard({ username }: { username: string }) {
   if (loading) {
     return (
       <section className="grid h-full place-items-center px-4">
-        <div className={cx("inline-flex items-center gap-2 text-sm font-semibold", isDark ? "text-violet-100/75" : "text-violet-950/60")}>
-          <LoaderCircle className="animate-spin" size={18} /> Loading profile...
-        </div>
+        <XpnLoader label="Loading profile..." />
       </section>
     );
   }
@@ -276,7 +308,10 @@ export function ProfileCard({ username }: { username: string }) {
       : likedVideos;
   const sortedVideos = sortProfileVideos(tabVideos, sortMode);
   const privateTabLocked = activeTab !== "videos" && !isOwnProfile;
-  const emptyMessage = privateTabLocked
+  const profileContentHidden = blockedByViewer || privateTabLocked;
+  const emptyMessage = blockedByViewer
+    ? `You blocked @${profile.username}. Unblock this account to see its posts.`
+    : privateTabLocked
     ? `${activeTab === "favorites" ? "Favorites" : "Liked videos"} are private.`
     : activeTab === "videos"
       ? "No visible posts yet."
@@ -364,15 +399,16 @@ export function ProfileCard({ username }: { username: string }) {
                   <Pencil size={16} />
                   Edit profile
                 </button>
-                <button
-                  type="button"
+                <Link
+                  href="/settings"
                   className={cx("grid h-11 w-11 place-items-center rounded-full ring-1 transition", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-violet-50 text-violet-950 ring-violet-200 hover:bg-violet-100")}
                   aria-label="Profile settings"
                 >
                   <Settings size={18} />
-                </button>
+                </Link>
                 <button
                   type="button"
+                  onClick={() => void shareProfile()}
                   className={cx("grid h-11 w-11 place-items-center rounded-full ring-1 transition", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-violet-50 text-violet-950 ring-violet-200 hover:bg-violet-100")}
                   aria-label="Share profile"
                 >
@@ -380,30 +416,67 @@ export function ProfileCard({ username }: { username: string }) {
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => void toggleFollow()}
-                disabled={!authenticated || followLoading}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                {followLoading ? (
-                  <LoaderCircle className="animate-spin" size={17} />
-                ) : profile.following ? (
-                  <UserCheck size={17} />
-                ) : (
-                  <UserPlus size={17} />
-                )}
-                {authenticated
-                  ? profile.following
-                    ? "Following"
-                    : "Follow"
-                  : "Log in to follow"}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void toggleFollow()}
+                  disabled={!authenticated || followLoading || blockedByViewer}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {followLoading ? (
+                    <LoaderCircle className="animate-spin" size={17} />
+                  ) : profile.following ? (
+                    <UserCheck size={17} />
+                  ) : (
+                    <UserPlus size={17} />
+                  )}
+                  {blockedByViewer
+                    ? "Blocked"
+                    : authenticated
+                      ? profile.following
+                        ? "Following"
+                        : "Follow"
+                      : "Log in to follow"}
+                </button>
+                <ProfileSafetyActions
+                  profile={profile}
+                  token={token}
+                  authenticated={authenticated}
+                  blocked={blockedByViewer}
+                  onBlockedChange={(blocked) => {
+                    if (blocked && profile.following) {
+                      setCachedProfile((current) => ({
+                        ...current,
+                        following: false,
+                        followers_count: Math.max(0, current.followers_count - 1),
+                      }));
+                    }
+                    setBlockedByViewer(blocked);
+                  }}
+                />
+              </div>
             )}
           </div>
           {followError && (
             <p className={cx("mt-4 rounded-md border border-pink-400/20 bg-pink-500/10 px-3 py-2 text-sm font-medium", isDark ? "text-pink-100" : "text-pink-700")}>
               {followError}
+            </p>
+          )}
+          {shareStatus && (
+            <p
+              role="status"
+              className={cx(
+                "mt-4 rounded-md border px-3 py-2 text-sm font-medium",
+                shareStatus.type === "success"
+                  ? isDark
+                    ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : isDark
+                    ? "border-pink-400/20 bg-pink-500/10 text-pink-100"
+                    : "border-pink-200 bg-pink-50 text-pink-700",
+              )}
+            >
+              {shareStatus.message}
             </p>
           )}
         </div>
@@ -443,7 +516,7 @@ export function ProfileCard({ username }: { username: string }) {
           </div>
         </Tabs>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
-          {!privateTabLocked && sortedVideos.map((video) => (
+          {!profileContentHidden && sortedVideos.map((video) => (
             <Link
               key={video.id}
               href={`/video/${video.id}`}
@@ -477,7 +550,7 @@ export function ProfileCard({ username }: { username: string }) {
               </div>
             </Link>
           ))}
-          {(privateTabLocked || !sortedVideos.length) && (
+          {(profileContentHidden || !sortedVideos.length) && (
             <div className={cx("col-span-full rounded-lg border px-5 py-10 text-center text-sm font-semibold", isDark ? "border-violet-200/10 bg-white/[0.04] text-violet-100/65" : "border-violet-200 bg-white text-zinc-500")}>
               {emptyMessage}
             </div>
@@ -669,10 +742,7 @@ export function ProfileCard({ username }: { username: string }) {
 
             <div className="flex-1 space-y-3 overflow-y-auto pr-1">
               {relationLoading && (
-                <div className={cx("grid h-40 place-items-center text-sm font-semibold", isDark ? "text-violet-100/55" : "text-zinc-500")}>
-                  <LoaderCircle className="mb-2 animate-spin" size={22} />
-                  Loading
-                </div>
+                <div className="grid h-40 place-items-center"><XpnLoader label="Loading accounts..." /></div>
               )}
 
               {!relationLoading && relationError && (
