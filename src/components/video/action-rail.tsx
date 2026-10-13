@@ -20,10 +20,12 @@ export function ActionRail({
   video,
   onComments,
   onFollowChange,
+  onSaveChange,
 }: {
   video: Video;
   onComments: () => void;
   onFollowChange?: (userId: number, following: boolean) => void;
+  onSaveChange?: (videoId: number, saved: boolean, savesCount: number) => void;
 }) {
   const { authenticated, token, user } = useAuth();
   const queryClient = useQueryClient();
@@ -82,18 +84,23 @@ export function ActionRail({
     if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
 
     const wasSaved = saved;
+    const previousSaves = saves;
+    const optimisticSaves = Math.max(0, previousSaves + (wasSaved ? -1 : 1));
     setSaved((value) => !value);
-    setSaves((value) => Math.max(0, value + (wasSaved ? -1 : 1)));
+    setSaves(optimisticSaves);
+    onSaveChange?.(video.id, !wasSaved, optimisticSaves);
 
     try {
       const response = wasSaved ? await unsaveVideo(video.id, token) : await saveVideo(video.id, token);
       setSaved(response.data.saved);
       setSaves(response.data.saves_count);
+      onSaveChange?.(video.id, response.data.saved, response.data.saves_count);
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["saved-videos"] });
     } catch {
       setSaved(wasSaved);
-      setSaves(video.stats.saves);
+      setSaves(previousSaves);
+      onSaveChange?.(video.id, wasSaved, previousSaves);
     }
   }
 
