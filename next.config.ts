@@ -29,6 +29,13 @@ const nextConfig: NextConfig = {
         hostname: "sfo3.digitaloceanspaces.com",
         pathname: "/ezwayradio/**",
       },
+
+      {
+        protocol: "https",
+        hostname:
+          "*.186454cd2996f179ec38c69acd714056.us.r2.cloudflarestorage.com",
+        pathname: "/**",
+      },
     ],
   },
 };
