@@ -4,6 +4,15 @@ const backendUrl = process.env.API_BACKEND_URL?.replace(/\/$/, "");
 const backendOrigin = backendUrl ? new URL(backendUrl) : null;
 
 const nextConfig: NextConfig = {
+  redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/feed",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return backendUrl
       ? [{ source: "/api/v1/:path*", destination: `${backendUrl}/api/v1/:path*` }]
@@ -22,6 +31,12 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+        pathname: "/a/**",
+        search: "",
       },
       {
         protocol: "http",

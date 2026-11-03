@@ -9,6 +9,8 @@ import {
   HelpCircle,
   Home,
   ListVideo,
+  MessageCircle,
+  Music2,
   LogOut,
   Moon,
   PanelLeft,
@@ -39,7 +41,9 @@ import { cx } from "@/lib/format";
 const baseNav = [
   { label: "For You", href: "/feed", icon: Home },
   { label: "Discover", href: "/search", icon: Compass },
+  { label: "Artists", href: "/artists", icon: Music2 },
   { label: "Following", href: "/following", icon: UserRoundPlus },
+  { label: "Inbox", href: "/inbox", icon: MessageCircle },
   { label: "Activity", href: "/activity", icon: Bell },
   // {
   //   label: "Short dramas",
@@ -50,6 +54,7 @@ const baseNav = [
   // { label: "LIVE", href: "/feed?tab=live", icon: Radio },
   { label: "Upload", href: "/upload", icon: PlusSquare },
   { label: "Posts", href: "/posts", icon: ListVideo },
+  { label: "Studio", href: "/studio", icon: Sparkles },
 ];
 
 type SidebarProps = {
@@ -175,12 +180,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {!collapsed && !loading && !authenticated && (
-        <Link
-          href="/login"
-          className="primary-button mt-7 w-full shrink-0"
-        >
-          Log in
-        </Link>
+        <div className="mt-7 grid shrink-0 gap-2">
+          <Link href="/join-free" className="primary-button w-full">Join free</Link>
+          <Link href="/login" className="inline-flex h-10 items-center justify-center rounded-xl text-sm font-semibold text-[var(--muted)] transition hover:bg-[var(--surface)] hover:text-[var(--foreground)]">Log in</Link>
+        </div>
       )}
 
       {!collapsed && (
@@ -252,6 +255,16 @@ function MoreSheetContent({
               label="General"
               href="/settings"
             />
+            <MorePanelRow
+              icon={<Sparkles size={19} />}
+              label="Pricing"
+              href="/pricing"
+            />
+            {authenticated && <MorePanelRow
+              icon={<Settings size={19} />}
+              label="Billing"
+              href="/settings/billing"
+            />}
             <div className="flex h-12 items-center justify-between rounded-md px-1 text-[16px] font-semibold">
               <span className="inline-flex items-center gap-3">
                 <Moon size={19} /> Dark mode

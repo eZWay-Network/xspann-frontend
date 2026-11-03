@@ -30,14 +30,15 @@ export function getDiscoverVideos(query: string, page = 1, limit = 20, token?: s
 
 export type CreateVideoPayload = {
   storage_path: string;
-  video_url?: string;
   thumbnail_url?: string;
   caption?: string;
-  sound_name?: string;
-  sound_artist?: string;
-  sound_provider?: "original" | "jamendo" | "local";
-  sound_external_id?: string;
-  sound_preview_url?: string;
+  audio_id?: number;
+  audio_mode?: "replace" | "mix";
+  audio_settings?: Record<string, unknown>;
+  reuse_content: boolean;
+  rights_confirmed: true;
+  rights_version: string;
+  publication_intent?: "immediate" | "draft";
   location_name?: string;
   visibility?: "public" | "followers" | "private";
   high_quality_upload?: boolean;
@@ -52,20 +53,14 @@ export type CreateVideoPayload = {
   filter_settings?: Record<string, unknown>;
 };
 
-export type UpdateVideoPayload = Partial<Omit<CreateVideoPayload, "storage_path" | "video_url" | "thumbnail_url" | "caption" | "location_name" | "scheduled_at" | "trim_start" | "trim_end" | "cover_time" | "text_overlay" | "sound_name" | "sound_artist" | "sound_external_id" | "sound_preview_url">> & {
+export type UpdateVideoPayload = {
   caption?: string | null;
   thumbnail_url?: string | null;
   location_name?: string | null;
-  scheduled_at?: string | null;
   pinned?: boolean;
-  trim_start?: number | null;
-  trim_end?: number | null;
-  cover_time?: number | null;
-  text_overlay?: string | null;
-  sound_name?: string | null;
-  sound_artist?: string | null;
-  sound_external_id?: string | null;
-  sound_preview_url?: string | null;
+  visibility?: "public" | "followers" | "private";
+  high_quality_upload?: boolean;
+  reuse_content?: boolean;
 };
 
 export function createVideo(payload: CreateVideoPayload, token: string) {

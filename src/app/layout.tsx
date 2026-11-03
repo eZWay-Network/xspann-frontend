@@ -1,18 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/common/providers";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const stripExtensionHydrationAttributes = `
 (() => {
@@ -112,12 +101,12 @@ const restoreTheme = `
 
 export const metadata: Metadata = {
   title: "XPN social",
-  description: "XPN social short-video platform UI mockup.",
+  description: "Discover artists, share releases and connect with fans on XPN social.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable}`} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Script id="restore-theme" strategy="beforeInteractive">
           {restoreTheme}

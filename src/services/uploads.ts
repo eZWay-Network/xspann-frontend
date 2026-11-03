@@ -3,7 +3,7 @@ import { apiRequest } from "./api";
 
 const videoChunkSize = 1024 * 1024;
 
-export function requestVideoUpload(payload: { filename: string; content_type: string }, token: string) {
+export function requestVideoUpload(payload: { filename: string; content_type: string; publication_intent?: "immediate" | "draft" }, token: string) {
   return apiRequest<SingleResponse<UploadSignedResponse | UploadFallbackResponse>>("/uploads/videos/signed-url", {
     method: "POST",
     token,
@@ -11,13 +11,14 @@ export function requestVideoUpload(payload: { filename: string; content_type: st
   });
 }
 
-export async function uploadLocalVideo(file: File, token: string) {
+export async function uploadLocalVideo(file: File, token: string, publicationIntent: "immediate" | "draft" = "immediate") {
   if (file.size > videoChunkSize) {
-    return uploadLocalVideoInChunks(file, token);
+    return uploadLocalVideoInChunks(file, token, publicationIntent);
   }
 
   const body = new FormData();
   body.append("file", file);
+  body.append("publication_intent", publicationIntent);
 
   return apiRequest<SingleResponse<LocalVideoUploadResponse>>("/uploads/videos/local", {
     method: "POST",
@@ -26,7 +27,7 @@ export async function uploadLocalVideo(file: File, token: string) {
   });
 }
 
-async function uploadLocalVideoInChunks(file: File, token: string) {
+async function uploadLocalVideoInChunks(file: File, token: string, publicationIntent: "immediate" | "draft") {
   const uploadId = createUploadId();
   const totalChunks = Math.ceil(file.size / videoChunkSize);
 
@@ -42,6 +43,7 @@ async function uploadLocalVideoInChunks(file: File, token: string) {
     body.append("content_type", file.type);
     body.append("total_size", String(file.size));
     body.append("chunk", chunk, `${file.name}.part${index}`);
+    body.append("publication_intent", publicationIntent);
 
     await apiRequest<SingleResponse<{ upload_method: "chunked"; upload_id: string; chunk_index: number; total_chunks: number }>>("/uploads/videos/chunk", {
       method: "POST",
@@ -59,6 +61,7 @@ async function uploadLocalVideoInChunks(file: File, token: string) {
       filename: file.name,
       content_type: file.type,
       total_size: file.size,
+      publication_intent: publicationIntent,
     }),
   });
 }

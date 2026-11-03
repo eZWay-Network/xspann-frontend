@@ -345,7 +345,7 @@ function PostIdentity({ post, isDark }: { post: Video; isDark: boolean }) {
           )}
         </div>
         <p className={cx("mt-1 text-xs font-medium", isDark ? "text-violet-100/52" : "text-zinc-500")}>{formatDate(post.created_at)} · {post.status}</p>
-        {post.sound_name && <p className={cx("mt-1 truncate text-xs", isDark ? "text-violet-100/38" : "text-zinc-400")}>{post.sound_name}</p>}
+        {post.audio?.title && <p className={cx("mt-1 truncate text-xs", isDark ? "text-violet-100/38" : "text-zinc-400")}>{post.audio.title}</p>}
       </div>
     </div>
   );
@@ -559,7 +559,8 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
   const trimStart = post.edit.trim_start ?? 0;
   const trimEnd = Math.max(trimStart + 0.1, post.edit.trim_end ?? post.duration ?? duration);
   const timelineMax = Math.max(trimEnd, trimStart + 0.1);
-  const hasExternalSound = Boolean(post.sound_preview_url);
+  // Server rendering produces the final soundtrack in the video asset.
+  const hasExternalSound = false;
   const videoMuted = hasExternalSound || post.edit.original_audio_muted;
 
   function syncAudioToVideo() {
@@ -675,7 +676,7 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
         <div className="absolute bottom-18 left-4 right-14">
           <p className="text-sm font-black">@{post.user.username}</p>
           <p className="line-clamp-2 text-xs text-white/88">{caption || "Your caption preview appears here"}</p>
-          <p className="mt-1 flex items-center gap-1 text-[11px] text-white/80"><Music2 size={12} /> {post.sound_name || "Original sound"}</p>
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-white/80"><Music2 size={12} /> {post.audio?.title || "Original sound"}</p>
         </div>
         <div className="absolute bottom-18 right-3 flex flex-col items-center gap-4 text-[10px] font-bold drop-shadow">
           <div className="relative mb-1">

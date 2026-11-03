@@ -2,6 +2,8 @@
 
 /* Shared, quiet surfaces keep the video and creator content in focus. */
 :root {
+  --font-inter: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --background: #101012;
   --foreground: #f4f4f5;
   --royal: #8b5cf6;
@@ -172,6 +174,20 @@ button:not(:disabled), [role="button"] { cursor: pointer; }
   transition: background-color 160ms;
 }
 .primary-button:hover { background: #6635d5; }
+.primary-button:disabled { cursor: not-allowed; opacity: .5; }
+.studio-input {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 0 12px;
+  color: var(--foreground);
+  font-size: 14px;
+  outline: none;
+}
+.studio-input:focus { border-color: var(--royal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--royal) 22%, transparent); }
+.studio-input:disabled { cursor: not-allowed; opacity: .55; }
 .xpn-loader {
   display: flex;
   width: fit-content;

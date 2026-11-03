@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, ListVideo, Plus, UserRound, UserRoundPlus } from "lucide-react";
+import { Bell, Compass, Home, MessageCircle, Music2, Plus, UserRound } from "lucide-react";
 import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
 import { useAuth } from "@/components/common/auth-provider";
 import { cx } from "@/lib/format";
@@ -14,9 +14,9 @@ export function BottomNav() {
   const items = [
     { label: "Home", href: "/feed", icon: Home },
     { label: "Discover", href: "/search", icon: Compass },
-    { label: "Following", href: "/following", icon: UserRoundPlus },
+    { label: "Artists", href: "/artists", icon: Music2 },
     { label: "Create", href: "/upload", icon: Plus },
-    { label: "Posts", href: "/posts", icon: ListVideo },
+    { label: "Inbox", href: "/inbox", icon: MessageCircle },
     { label: "Activity", href: "/activity", icon: Bell },
     { label: "Profile", href: profileHref, icon: UserRound },
   ];

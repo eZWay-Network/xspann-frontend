@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 export const AUTH_UNAUTHORIZED_EVENT = "xspann-auth-unauthorized";
 
 export type ApiOptions = RequestInit & { token?: string | null };
@@ -30,8 +30,8 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+    if (response.status === 401 && token && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT, { detail: { token } }));
     }
 
     const fallbackMessage =
@@ -42,5 +42,20 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
     throw new ApiError(payload?.message ?? fallbackMessage, response.status, payload?.errors ?? {});
   }
 
-  return payload as T;
+  return (response.status === 204 ? undefined : payload) as T;
+}
+
+export async function apiDownload(path: string, token: string, signal?: AbortSignal) {
+  const url = /^https?:\/\//i.test(path) ? path : `${API_URL}${path}`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/octet-stream", Authorization: `Bearer ${token}` },
+    signal,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new ApiError(payload?.message ?? `Download failed: ${response.status}`, response.status, payload?.errors ?? {});
+  }
+
+  return response.blob();
 }

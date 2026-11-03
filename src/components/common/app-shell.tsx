@@ -7,6 +7,8 @@ import {
   Compass,
   Home,
   ListVideo,
+  MessageCircle,
+  Music2,
   LogIn,
   LogOut,
   Menu,
@@ -60,9 +62,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         ) : (
-          <Link href="/login" className="primary-button">
-            <LogIn size={16} /> Log in
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-[var(--muted)] transition hover:bg-[var(--surface)] hover:text-[var(--foreground)]">
+              <LogIn size={16} /> Log in
+            </Link>
+            <Link href="/join-free" className="primary-button">Join free</Link>
+          </div>
         )}
       </div>
       <main className={cx("h-dvh overflow-hidden transition-[margin] duration-200", sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[236px]")}>{children}</main>
@@ -89,7 +94,9 @@ function MobileMenu({
   const navItems = [
     { label: "For You", href: "/feed", icon: Home },
     { label: "Discover", href: "/search", icon: Compass },
+    { label: "Artists", href: "/artists", icon: Music2 },
     { label: "Following", href: "/following", icon: UserRoundPlus },
+    { label: "Inbox", href: "/inbox", icon: MessageCircle },
     { label: "Activity", href: "/activity", icon: Bell },
     { label: "Upload", href: "/upload", icon: PlusSquare },
     { label: "Posts", href: "/posts", icon: ListVideo },
@@ -97,7 +104,7 @@ function MobileMenu({
   ];
   const otherItems = [
     { label: "Settings", href: "/settings", icon: Settings },
-    { label: "XPN social Studio", href: "/posts", icon: Sparkles },
+    { label: "XPN social Studio", href: "/studio", icon: Sparkles },
     { label: "Create effects", href: "/upload", icon: Wand2 },
     { label: "Help Center", href: "/settings", icon: HelpCircle },
   ];
@@ -190,7 +197,10 @@ function MobileMenu({
                 </button>
               </SheetClose>
             ) : (
-              <MobileMenuLink active={pathname === "/login"} href="/login" icon={LogIn} isDark={isDark} label="Log in" />
+              <>
+                <MobileMenuLink active={pathname === "/join-free"} href="/join-free" icon={Sparkles} isDark={isDark} label="Join free" />
+                <MobileMenuLink active={pathname === "/login"} href="/login" icon={LogIn} isDark={isDark} label="Log in" />
+              </>
             )}
           </MobileMenuSection>
         </div>

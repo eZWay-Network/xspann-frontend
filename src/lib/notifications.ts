@@ -76,7 +76,17 @@ export function notificationDetails(notification: Notification) {
     ? `${name} ${action}`
     : message ?? (name ? `${name} ${action}` : (category === "other" ? fallback : `Someone ${action}`));
   const detail = commentBody && !title.includes(commentBody) && (category === "comments" || category === "likes") ? commentBody : null;
-  const href = videoId ? `/video/${videoId}` : username ? `/profile/${encodeURIComponent(username)}` : null;
+  const type = notification.type.toLowerCase();
+  const conversationId = positiveId(data.conversation_id, record(data.conversation).id);
+  const announcementId = positiveId(data.announcement_id, record(data.announcement).id);
+  const releaseId = positiveId(data.release_id, data.video_id, video.id);
+  const href = /direct.?message|message\.created/.test(type) && conversationId
+    ? `/inbox/${conversationId}`
+    : /artist.?announcement/.test(type) && announcementId
+      ? `/activity?announcement=${announcementId}`
+      : /release.?paused/.test(type) && releaseId
+        ? `/studio?release=${releaseId}`
+        : videoId ? `/video/${videoId}` : username ? `/profile/${encodeURIComponent(username)}` : null;
 
   return { avatar, category, commentBody, commentId, detail, href, parentId, thumbnail, title, videoId };
 }

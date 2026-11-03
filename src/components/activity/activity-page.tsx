@@ -13,7 +13,7 @@ import { categoryOf, collapseNotifications, notificationDetails, type ActivityIt
 import { queryKeys } from "@/lib/query-keys";
 import { ApiError } from "@/services/api";
 import { getCommentReplies, getComments } from "@/services/comments";
-import { getNotifications, markAllNotificationsRead, markNotificationRead, NOTIFICATION_REFRESH_INTERVAL_MS } from "@/services/notifications";
+import { clearReadNotifications, getNotifications, markAllNotificationsRead, markNotificationRead, NOTIFICATION_REFRESH_INTERVAL_MS } from "@/services/notifications";
 import { getVideo } from "@/services/videos";
 
 type Filter = "all" | "likes" | "comments" | "mentions" | "followers";
@@ -90,6 +90,13 @@ export function ActivityPage() {
     }
   }
 
+  async function clearRead() {
+    if (!token) return;
+    setActionError("");
+    try { await clearReadNotifications(token); await refreshNotifications(); }
+    catch (error) { setActionError(error instanceof ApiError ? error.message : "Could not clear read activity."); }
+  }
+
   return (
     <section className="modern-scrollbar h-full overflow-y-auto px-4 pb-24 pt-20 sm:px-8 md:pb-10">
       <div className="mx-auto max-w-[680px]">
@@ -112,7 +119,8 @@ export function ActivityPage() {
         </div>
 
         {notifications.length > 0 && (
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex justify-end gap-4">
+            <button type="button" onClick={() => void clearRead()} className="text-sm font-semibold text-[var(--muted)] hover:text-[var(--foreground)]">Clear read activity</button>
             <button type="button" onClick={() => void markAllRead()} disabled={markingAll} className="text-sm font-semibold text-[var(--royal)] hover:underline disabled:opacity-50">
               {markingAll ? "Marking..." : "Mark all as read"}
             </button>

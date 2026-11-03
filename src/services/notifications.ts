@@ -20,3 +20,11 @@ export function markAllNotificationsRead(token: string) {
     token,
   });
 }
+
+export function getNotificationUnreadCount(token: string) {
+  return apiRequest<SingleResponse<{ unread_count: number }>>("/notifications/unread-count", { token });
+}
+
+export function clearReadNotifications(token: string) {
+  return apiRequest<void>("/notifications/clear-all", { method: "DELETE", token });
+}

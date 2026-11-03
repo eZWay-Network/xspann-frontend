@@ -1,0 +1,16 @@
+"use client";
+
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { MessageCircle, Search } from "lucide-react";
+import { useState } from "react";
+import { useAuth } from "@/components/common/auth-provider";
+import { XpnLoader } from "@/components/common/xpn-loader";
+import { getConversations } from "@/services/messaging";
+
+export function InboxPage() {
+  const { token, user } = useAuth(); const [query, setQuery] = useState("");
+  const inbox = useQuery({ queryKey: ["conversations", user?.id], queryFn: () => getConversations(token!) });
+  const conversations = (inbox.data?.data ?? []).filter((item) => !query || item.last_message?.body.toLowerCase().includes(query.toLowerCase()) || String(item.recipient_user_id).includes(query));
+  return <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"><div className="mx-auto max-w-3xl"><div><p className="text-sm font-semibold text-[var(--royal)]">Messages</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Inbox</h1><p className="mt-2 text-sm text-[var(--muted)]">Private conversations between mutually connected accounts.</p></div><label className="mt-7 flex h-11 items-center gap-3 rounded-xl bg-[var(--surface)] px-4"><Search size={17} className="text-[var(--muted)]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search messages" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label><div className="mt-5 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)]">{inbox.isPending && <div className="grid min-h-48 place-items-center"><XpnLoader label="Loading inbox…" /></div>}{conversations.map((conversation) => <Link key={conversation.id} href={`/inbox/${conversation.id}`} className="flex gap-4 border-b border-[var(--line)] p-4 transition last:border-0 hover:bg-[var(--surface)]"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-violet-500/10 font-bold text-[var(--royal)]">{String(conversation.recipient_user_id).slice(-2)}</span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate font-semibold">Account {conversation.recipient_user_id}</p><time className="shrink-0 text-[11px] text-[var(--muted)]">{conversation.last_message ? new Date(conversation.last_message.created_at).toLocaleDateString() : ""}</time></div><div className="mt-1 flex items-center gap-2"><p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{conversation.last_message?.unavailable ? "Message unavailable" : conversation.last_message?.body ?? "Start the conversation"}</p>{conversation.unread_count > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unread_count}</span>}</div></div></Link>)}{!inbox.isPending && !conversations.length && <div className="py-16 text-center"><MessageCircle className="mx-auto text-[var(--muted)]" size={34} /><h2 className="mt-4 font-semibold">No conversations yet</h2><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">Open a mutual connection’s profile to start a message.</p></div>}</div></div></section>;
+}

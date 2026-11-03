@@ -320,7 +320,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                         .join(" ")}
                     </p>
                     <div className="mt-2.5 flex items-center gap-2 text-xs text-white/75">
-                      <Music size={13} className="shrink-0" /> <span className="truncate">{video.music}</span>
+                      <Music size={13} className="shrink-0" /> <span className="truncate">{video.audio?.title ?? "Original sound"}</span>
                     </div>
                   </div>
                 </div>
@@ -431,7 +431,8 @@ function VideoPlayer({
   const lastVideoTimeRef = useRef(0);
   const [progress, setProgress] = useState(0);
   const [isDraggingProgress, setIsDraggingProgress] = useState(false);
-  const hasExternalSound = Boolean(video.sound_preview_url);
+  // Published videos already contain their final encoded mix; never play a second preview track.
+  const hasExternalSound = false;
   const trimStart = video.edit.trim_start ?? 0;
   const trimEnd = video.edit.trim_end;
   const filterStyle = buildVideoFilter(video.edit.filter_settings);

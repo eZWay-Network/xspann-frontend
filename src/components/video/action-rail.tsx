@@ -151,40 +151,43 @@ export function ActionRail({
       return;
     }
 
-    await recordShare(channel);
-
     if (channel === "whatsapp") {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (channel === "facebook") {
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (channel === "telegram") {
-      window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (channel === "x") {
-      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (channel === "linkedin") {
-      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (channel === "pinterest") {
-      window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer");
+      if (window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
       return;
     }
 
     if (typeof navigator !== "undefined" && "share" in navigator) {
-      await navigator.share({ title: "XPN social", text: video.caption ?? undefined, url: shareUrl }).catch(() => undefined);
+      try {
+        await navigator.share({ title: "XPN social", text: video.caption ?? undefined, url: shareUrl });
+        await recordShare(channel);
+      } catch {
+        // Dismissing the native share sheet is not a completed share.
+      }
     }
   }
 

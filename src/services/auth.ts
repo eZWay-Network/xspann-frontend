@@ -1,8 +1,11 @@
-import type { AuthResponse, Profile, SingleResponse } from "@/types/api";
+import type { AuthResponse, PolicyCatalog, Profile, SingleResponse } from "@/types/api";
 import { apiRequest } from "./api";
 
-const TOKEN_KEY = "xspann_vertical_token";
-const TOKEN_EXPIRES_AT_KEY = "xspann_vertical_token_expires_at";
+export const AUTH_STORAGE_KEYS = {
+  token: "xspann_vertical_token",
+  expiresAt: "xspann_vertical_token_expires_at",
+  user: "xspann_vertical_session_user",
+} as const;
 
 type LoginPayload = {
   email: string;
@@ -19,6 +22,8 @@ type RegisterPayload = {
   avatar?: string;
   bio?: string;
   device_name?: string;
+  date_of_birth: string;
+  accepted_policies: Record<string, string>;
 };
 
 type ForgotPasswordPayload = {
@@ -40,25 +45,34 @@ type ChangePasswordPayload = {
 
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return window.localStorage.getItem(AUTH_STORAGE_KEYS.token);
 }
 
 export function storeToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+  window.localStorage.setItem(AUTH_STORAGE_KEYS.token, token);
+}
+
+export function storeSessionUser(user: Profile): void {
+  window.localStorage.setItem(AUTH_STORAGE_KEYS.user, JSON.stringify(user));
+}
+
+export function getStoredSessionUser(): Profile | null {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(window.localStorage.getItem(AUTH_STORAGE_KEYS.user) ?? "null") as Profile | null; } catch { return null; }
 }
 
 export function storeTokenExpiresAt(expiresAt: string | null): void {
   if (!expiresAt) {
-    window.localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
+    window.localStorage.removeItem(AUTH_STORAGE_KEYS.expiresAt);
     return;
   }
 
-  window.localStorage.setItem(TOKEN_EXPIRES_AT_KEY, expiresAt);
+  window.localStorage.setItem(AUTH_STORAGE_KEYS.expiresAt, expiresAt);
 }
 
 export function getStoredTokenExpiresAt(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
+  return window.localStorage.getItem(AUTH_STORAGE_KEYS.expiresAt);
 }
 
 export function storedTokenIsExpired(): boolean {
@@ -67,8 +81,9 @@ export function storedTokenIsExpired(): boolean {
 }
 
 export function clearStoredToken(): void {
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
+  window.localStorage.removeItem(AUTH_STORAGE_KEYS.token);
+  window.localStorage.removeItem(AUTH_STORAGE_KEYS.expiresAt);
+  window.localStorage.removeItem(AUTH_STORAGE_KEYS.user);
 }
 
 export function login(payload: LoginPayload) {
@@ -130,10 +145,10 @@ export function changePassword(payload: ChangePasswordPayload, token: string) {
   });
 }
 
-export function resendVerificationEmail(token: string) {
+export function resendVerificationEmail(email: string) {
   return apiRequest<SingleResponse<{ message: string }>>("/auth/email/verification-notification", {
     method: "POST",
-    token,
+    body: JSON.stringify({ email }),
   });
 }
 
@@ -142,4 +157,12 @@ export function refreshToken(token: string) {
     method: "POST",
     token,
   });
+}
+
+export function getPolicies() {
+  return apiRequest<SingleResponse<PolicyCatalog>>("/policies");
+}
+
+export function completeOnboarding(payload: { onboarding_token: string; date_of_birth: string; accepted_policies: Record<string, string> }) {
+  return apiRequest<AuthResponse>("/auth/onboarding", { method: "POST", body: JSON.stringify(payload) });
 }

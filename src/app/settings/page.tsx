@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/common/app-shell";
 import { ProtectedRoute } from "@/components/common/protected-route";
 import { useAuth } from "@/components/common/auth-provider";
@@ -60,13 +61,13 @@ function SettingsContent() {
     : "border-zinc-200 bg-white text-zinc-950 placeholder:text-zinc-400 focus:border-violet-500";
 
   async function handleResendVerification() {
-    if (!token) return;
+    if (!user?.email) return;
     setStatus("");
     setError("");
     setSubmitting("verify");
 
     try {
-      const response = await resendVerificationEmail(token);
+      const response = await resendVerificationEmail(user.email);
       setStatus(response.data.message);
       await refreshUser().catch(() => undefined);
     } catch (caughtError) {
@@ -171,6 +172,14 @@ function SettingsContent() {
             <h2 className="mb-4 text-lg font-semibold">Account information</h2>
             <InfoRow label="Username" value={`@${user?.username ?? "unknown"}`} mutedClass={mutedClass} />
             <InfoRow label="Email" value={user?.email ?? "No email"} mutedClass={mutedClass} />
+          </section>
+
+          <section className={cx("border-b py-6", rowBorderClass)}>
+            <h2 className="mb-4 text-lg font-semibold">Privacy and billing</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Link href="/settings/privacy" className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 transition hover:border-violet-500/30"><p className="font-bold">Privacy & communication</p><p className={cx("mt-1 text-sm", mutedClass)}>Policies, preferences, data export and deletion.</p></Link>
+              <Link href="/settings/billing" className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 transition hover:border-violet-500/30"><p className="font-bold">Subscription & invoices</p><p className={cx("mt-1 text-sm", mutedClass)}>Plan status, receipts and renewal controls.</p></Link>
+            </div>
           </section>
 
           <section className={cx("border-b py-6", rowBorderClass)}>

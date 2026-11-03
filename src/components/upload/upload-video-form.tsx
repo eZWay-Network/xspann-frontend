@@ -36,6 +36,8 @@ import { ApiError } from "@/services/api";
 import { fallbackTracks, searchMusicTracks } from "@/services/music";
 import { requestVideoUpload, uploadLocalAudio, uploadLocalVideo } from "@/services/uploads";
 import { createVideo } from "@/services/videos";
+import { createAudio } from "@/services/audio";
+import { getPolicies } from "@/services/auth";
 import { cx } from "@/lib/format";
 import type { MusicTrack } from "@/types/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -92,6 +94,9 @@ export function UploadVideoForm() {
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [highQuality, setHighQuality] = useState(true);
+  const [reuseContent, setReuseContent] = useState(false);
+  const [rightsAccepted, setRightsAccepted] = useState(false);
+  const [publicationIntent] = useState<"immediate" | "draft">(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("intent") === "draft" ? "draft" : "immediate");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("feed");
   const [soundQuery, setSoundQuery] = useState("lofi");
   const [soundResults, setSoundResults] = useState<MusicTrack[]>(fallbackTracks);
@@ -339,9 +344,10 @@ export function UploadVideoForm() {
       pausePreview();
       setError("");
       setStep("preparing");
-      const uploadPlan = await requestVideoUpload({ filename: file.name, content_type: file.type }, token);
+      if (!rightsAccepted) throw new Error("Confirm the rights declaration before uploading.");
+      const policyResponse = await getPolicies();
+      const uploadPlan = await requestVideoUpload({ filename: file.name, content_type: file.type, publication_intent: publicationIntent }, token);
       let storagePath = "";
-      let videoUrl: string | undefined;
 
       setStep("uploading");
       if (uploadPlan.data.upload_method === "signed_url") {
@@ -357,28 +363,29 @@ export function UploadVideoForm() {
 
         storagePath = uploadPlan.data.storage_path;
       } else {
-        const localUpload = await uploadLocalVideo(file, token);
+        const localUpload = await uploadLocalVideo(file, token, publicationIntent);
         storagePath = localUpload.data.storage_path;
-        videoUrl = localUpload.data.video_url;
       }
 
-      let soundPreviewUrl = toAbsoluteUrl(selectedSound.preview_url);
+      let audioId = selectedSound.provider === "library" ? Number(selectedSound.id) : undefined;
 
       if (selectedSound.id === customAudioId && customAudioFile) {
         const audioUpload = await uploadLocalAudio(customAudioFile, token);
-        soundPreviewUrl = audioUpload.data.audio_url;
+        const audio = await createAudio({ storage_path: audioUpload.data.storage_path, title: selectedSound.name, reuse_allowed: reuseContent, rights_confirmed: true, rights_version: policyResponse.data.rights_version }, token);
+        audioId = audio.data.id;
       }
 
       setStep("publishing");
       const video = await createVideo({
         storage_path: storagePath,
-        video_url: videoUrl,
         caption: caption.trim() || undefined,
-        sound_name: selectedSound.name,
-        sound_artist: selectedSoundArtist,
-        sound_provider: selectedSound.provider,
-        sound_external_id: selectedSound.provider === "jamendo" ? selectedSound.id : undefined,
-        sound_preview_url: soundPreviewUrl,
+        audio_id: audioId,
+        audio_mode: audioId ? "replace" : undefined,
+        audio_settings: audioId ? { start: 0, original_volume: 0, sound_volume: 1 } : undefined,
+        reuse_content: reuseContent,
+        rights_confirmed: true,
+        rights_version: policyResponse.data.rights_version,
+        publication_intent: publicationIntent,
         visibility,
         high_quality_upload: highQuality,
         trim_start: trimStart,
@@ -425,6 +432,8 @@ export function UploadVideoForm() {
     setCaption("");
     setVisibility("public");
     setHighQuality(true);
+    setReuseContent(false);
+    setRightsAccepted(false);
     setPreviewMode("feed");
     setSoundQuery("lofi");
     setSoundResults(fallbackTracks);
@@ -512,6 +521,8 @@ export function UploadVideoForm() {
                 <span>High-quality uploads</span>
                 <input type="checkbox" checked={highQuality} onChange={(event) => setHighQuality(event.target.checked)} className="h-4 w-4 accent-violet-600" />
               </label>
+              <label className="mt-3 flex items-center justify-between rounded-md bg-zinc-100 px-3 py-3 text-sm font-semibold"><span>Allow others to reuse this content</span><input type="checkbox" checked={reuseContent} onChange={(event) => setReuseContent(event.target.checked)} className="h-4 w-4 accent-violet-600" /></label>
+              <label className="mt-3 flex items-start gap-3 rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-sm"><input type="checkbox" required checked={rightsAccepted} onChange={(event) => setRightsAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span>I own or have permission for the video, audio, music and people shown, including any reuse I enable.</span></label>
             </Panel>
           </div>
 
@@ -587,9 +598,9 @@ export function UploadVideoForm() {
             {error && <Status tone="error" text={error} />}
             {submitting && <Progress step={step} />}
 
-            <button type="submit" disabled={submitting || !file || step === "done"} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
+            <button type="submit" disabled={submitting || !file || !rightsAccepted || step === "done"} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
               {submitting && <LoaderCircle size={18} className="animate-spin" />}
-              {submitting ? stepLabel(step) : "Publish"}
+              {submitting ? stepLabel(step) : publicationIntent === "draft" ? "Save as draft" : "Publish"}
             </button>
           </aside>
         </div>
@@ -1388,17 +1399,6 @@ function waitForVideoEvent(video: HTMLVideoElement, eventName: "loadedmetadata" 
     video.addEventListener(eventName, handleEvent, { once: true });
     video.addEventListener("error", handleError, { once: true });
   });
-}
-
-function toAbsoluteUrl(value: string | undefined) {
-  if (!value) return undefined;
-
-  try {
-    return new URL(value).toString();
-  } catch {
-    if (typeof window === "undefined") return undefined;
-    return new URL(value, window.location.origin).toString();
-  }
 }
 
 function buildVideoFilter(filters: FilterSettings) {

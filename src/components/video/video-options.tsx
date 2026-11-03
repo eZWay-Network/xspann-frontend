@@ -260,7 +260,7 @@ export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOpt
               <VideoDetail label="Visibility" value={capitalize(video.visibility)} />
               {video.duration !== null && <VideoDetail label="Duration" value={formatDuration(video.duration)} />}
               {video.location_name && <VideoDetail label="Location" value={video.location_name} icon={<MapPin size={15} />} />}
-              <VideoDetail label="Sound" value={video.music} icon={<Music size={15} />} />
+              <VideoDetail label="Sound" value={video.audio?.title ?? "Original sound"} icon={<Music size={15} />} />
             </dl>
           </div>
         </DialogContent>

@@ -11,10 +11,12 @@ import {
   Grid2X2,
   Heart,
   LoaderCircle,
+  MessageCircle,
   LockKeyhole,
   Pencil,
   Settings,
   Share2,
+  Sparkles,
   UserCheck,
   UserPlus,
   VideoOff,
@@ -43,6 +45,8 @@ import { getLikedVideos } from "@/services/likes";
 import { getSavedVideos } from "@/services/saves";
 import { uploadAvatar } from "@/services/uploads";
 import { getFollowers, getFollowing, getProfile, getUserVideos } from "@/services/users";
+import { openConversation } from "@/services/messaging";
+import { getMyArtist } from "@/services/artists";
 import type { Profile, SingleResponse, UserSummary, Video } from "@/types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -59,6 +63,7 @@ export function ProfileCard({ username }: { username: string }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("videos");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [followLoading, setFollowLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [blockedByViewer, setBlockedByViewer] = useState(false);
@@ -75,7 +80,7 @@ export function ProfileCard({ username }: { username: string }) {
   const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string[]>>({});
   const isDark = theme === "dark";
   const queryClient = useQueryClient();
-  const authScope = token ? "auth" : "guest";
+  const authScope = token && viewer ? viewer.id : "guest";
   const profileQueryKey = queryKeys.profile(username, authScope);
   const profileQuery = useQuery({
     enabled: !authLoading,
@@ -91,6 +96,18 @@ export function ProfileCard({ username }: { username: string }) {
     staleTime: 45 * 1000,
   });
   const isOwnProfileFromQuery = Boolean(token && viewer?.id && profile?.id === viewer.id);
+  const myArtistQuery = useQuery({
+    enabled: isOwnProfileFromQuery,
+    queryKey: ["my-artist", viewer?.id],
+    queryFn: async () => {
+      try {
+        return (await getMyArtist(token as string)).data;
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 404) return null;
+        throw caught;
+      }
+    },
+  });
   const favoriteVideosQuery = useQuery({
     enabled: isOwnProfileFromQuery,
     queryKey: queryKeys.savedVideos(authScope),
@@ -391,6 +408,13 @@ export function ProfileCard({ username }: { username: string }) {
             </div>
             {isOwnProfile ? (
               <div className="flex shrink-0 flex-wrap gap-2">
+                <Link
+                  href="/studio"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[var(--royal)] px-5 text-sm font-bold text-white transition hover:brightness-110"
+                >
+                  <Sparkles size={16} />
+                  {myArtistQuery.data ? "Artist workspace" : "Become an artist"}
+                </Link>
                 <button
                   type="button"
                   onClick={openEditProfile}
@@ -437,6 +461,22 @@ export function ProfileCard({ username }: { username: string }) {
                         ? "Following"
                         : "Follow"
                       : "Log in to follow"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!authenticated || !token || blockedByViewer || messageLoading}
+                  onClick={() => {
+                    if (!token) return;
+                    setMessageLoading(true);
+                    void openConversation(profile.id, token)
+                      .then((response) => router.push(`/inbox/${response.data.id}`))
+                      .catch((error) => setFollowError(error instanceof ApiError ? error.message : "Could not open a conversation."))
+                      .finally(() => setMessageLoading(false));
+                  }}
+                  className={cx("grid h-11 w-11 place-items-center rounded-full ring-1 transition", isDark ? "bg-white/10 text-white ring-white/10 hover:bg-white/15" : "bg-violet-50 text-violet-950 ring-violet-200 hover:bg-violet-100")}
+                  aria-label="Message this account"
+                >
+                  {messageLoading ? <LoaderCircle size={17} className="animate-spin" /> : <MessageCircle size={18} />}
                 </button>
                 <ProfileSafetyActions
                   profile={profile}

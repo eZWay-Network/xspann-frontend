@@ -17,13 +17,13 @@ const logos = {
   },
 };
 
-export function Logo() {
+export function Logo({ href = "/feed" }: { href?: string }) {
   const { theme } = useTheme();
   const logo = logos[theme];
 
   return (
     <Link
-      href="/feed"
+      href={href}
       className="inline-flex items-center"
       aria-label="XPN social home"
     >
