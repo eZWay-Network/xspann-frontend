@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, BarChart3, CalendarClock, CheckCircle2, CircleDollarSign, ExternalLink, ListMusic, LoaderCircle, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
+import { BarChart3, CalendarClock, CheckCircle2, CircleDollarSign, ExternalLink, GripVertical, ListMusic, LoaderCircle, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { ApiError } from "@/services/api";
@@ -14,7 +14,7 @@ import { createAnnouncement, getOwnerAnnouncements, sendAnnouncement } from "@/s
 import { createBoost, getBoostBalance, getBoosts, getPromotionOffers, submitBoost } from "@/services/promotions";
 import { cancelReleaseSchedule, getReleases, publishRelease, retryRelease, scheduleRelease } from "@/services/releases";
 import { getMyVideos } from "@/services/videos";
-import { moveOrderedItem, normalizeArtistSlug } from "@/lib/artists";
+import { normalizeArtistSlug } from "@/lib/artists";
 import type { Artist, ArtistPlaylist, Boost, Release, Video } from "@/types/api";
 
 type Tab = "overview" | "profile" | "releases" | "playlists" | "announcements" | "promotions";
@@ -127,10 +127,45 @@ function PlaylistsPanel({ token, userId, limit }: { token: string; userId: numbe
       <form onSubmit={(event) => { event.preventDefault(); setError(""); create.mutate(); }} className="mb-5 flex gap-2"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Playlist title" required maxLength={120} className="studio-input" /><button disabled={create.isPending || query.isPending} className="primary-button"><Plus size={16} /> Create</button></form>
     )}
     {error && <InlineError message={error} />}
-    <div className="grid gap-3 sm:grid-cols-2">{query.data?.data.map((playlist) => <div key={playlist.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{playlist.title}</h3><p className="mt-1 text-xs text-[var(--muted)]">{playlist.videos_count} videos · {playlist.visibility}{playlist.read_only ? " · read only" : ""}</p></div><div className="flex"><button type="button" onClick={() => setSelectedId(selectedId === playlist.id ? null : playlist.id)} aria-label={`Edit ${playlist.title}`} className="icon-button"><Pencil size={16} /></button><button type="button" onClick={() => void remove(playlist)} aria-label={`Delete ${playlist.title}`} className="icon-button"><Trash2 size={16} /></button></div></div></div>)}</div>
+    <div className="grid gap-4 sm:grid-cols-2">{query.data?.data.map((playlist) => <PlaylistSummaryCard key={playlist.id} playlist={playlist} selected={selectedId === playlist.id} onEdit={() => setSelectedId(selectedId === playlist.id ? null : playlist.id)} onDelete={() => void remove(playlist)} />)}</div>
     {!query.isPending && !query.data?.data.length && <Empty icon={ListMusic} title="No playlists" text="Create a collection for your releases, live clips or behind-the-scenes posts." />}
     {selectedId && <PlaylistEditor key={selectedId} id={selectedId} token={token} userId={userId} onClose={() => setSelectedId(null)} />}
   </Panel>;
+}
+
+function PlaylistSummaryCard({ playlist, selected, onEdit, onDelete }: { playlist: ArtistPlaylist; selected: boolean; onEdit: () => void; onDelete: () => void }) {
+  const category = playlist.category.replaceAll("_", " ");
+  return (
+    <article className={`group relative overflow-hidden rounded-2xl border bg-[var(--surface)] transition ${selected ? "border-violet-400 shadow-[0_10px_30px_rgba(124,58,237,0.12)] ring-2 ring-violet-400/15" : "border-[var(--line)] hover:border-violet-400/55 hover:shadow-sm"}`}>
+      <button type="button" onClick={onEdit} aria-pressed={selected} className="flex w-full min-w-0 items-center gap-4 p-3 pr-24 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400">
+        <span className="relative block h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-900">
+          {playlist.cover_url ? (
+            <Image src={playlist.cover_url} alt="" fill sizes="80px" className="object-cover transition duration-300 group-hover:scale-[1.04]" />
+          ) : (
+            <span className="absolute inset-0 grid place-items-center overflow-hidden bg-[linear-gradient(145deg,#7c3aed,#4c1d95_58%,#18181b)] text-white">
+              <span className="absolute -right-5 -top-5 h-16 w-16 rounded-full border border-white/20" />
+              <span className="absolute -bottom-5 -left-5 h-20 w-20 rounded-full bg-white/10" />
+              <ListMusic size={25} className="relative" />
+            </span>
+          )}
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">{playlist.videos_count}</span>
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--royal)]">{category}</span>{playlist.read_only && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-400">Read only</span>}</span>
+          <span className="mt-2 block truncate text-base font-semibold">{playlist.title}</span>
+          <span className="mt-1 block truncate text-xs text-[var(--muted)]">{playlist.description || "A collection of your releases."}</span>
+          <span className="mt-2 block text-xs font-medium capitalize text-[var(--muted)]">{playlist.videos_count} {playlist.videos_count === 1 ? "video" : "videos"} · {playlist.visibility}</span>
+          {selected && <span className="mt-2 block text-xs font-bold text-[var(--royal)]">Currently editing</span>}
+        </span>
+      </button>
+
+      <div className="absolute right-3 top-3 flex gap-1 rounded-lg bg-[var(--panel)]/90 p-1 shadow-sm backdrop-blur">
+        <button type="button" onClick={onEdit} aria-label={`${selected ? "Close editor for" : "Edit"} ${playlist.title}`} className={`icon-button ${selected ? "text-[var(--royal)]" : ""}`}><Pencil size={15} /></button>
+        <button type="button" onClick={onDelete} aria-label={`Delete ${playlist.title}`} className="icon-button text-pink-500"><Trash2 size={15} /></button>
+      </div>
+    </article>
+  );
 }
 
 function PlaylistEditor({ id, token, userId, onClose }: { id: number; token: string; userId: number; onClose: () => void }) {
@@ -147,9 +182,31 @@ function PlaylistEditorForm({ playlist, availableVideos, token, userId, onClose,
   const [videoIds, setVideoIds] = useState(playlist.items?.map((item) => item.video_id) ?? playlist.videos?.map((video) => video.id) ?? []);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const videos = Array.from(new Map([
+    ...(playlist.videos ?? []),
+    ...(playlist.items?.flatMap((item) => item.video ? [item.video] : []) ?? []),
+    ...availableVideos,
+  ].map((video) => [video.id, video])).values());
 
-  function move(index: number, direction: -1 | 1) {
-    setVideoIds((current) => moveOrderedItem(current, index, direction));
+  function reorderVideo(sourceId: number, targetId: number) {
+    setVideoIds((current) => {
+      const sourceIndex = current.indexOf(sourceId);
+      const targetIndex = current.indexOf(targetId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return current;
+
+      const next = [...current];
+      const [movedId] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, movedId);
+      return next;
+    });
+  }
+
+  function addVideo(id: number) {
+    setVideoIds((current) => current.includes(id) || current.length >= 100 ? current : [...current, id]);
+  }
+
+  function removeVideo(id: number) {
+    setVideoIds((current) => current.filter((videoId) => videoId !== id));
   }
 
   async function save(event: FormEvent) {
@@ -172,7 +229,127 @@ function PlaylistEditorForm({ playlist, availableVideos, token, userId, onClose,
     }
   }
 
-  return <form onSubmit={save} className="mt-6 rounded-2xl border border-violet-500/20 bg-[var(--background)] p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-[var(--royal)]">Playlist editor</p><h3 className="mt-1 text-lg font-semibold">{playlist.title}</h3></div><button type="button" onClick={onClose} className="text-sm font-bold text-[var(--muted)]">Close</button></div>{playlist.read_only && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400"><span>This playlist is read-only because the current plan limit is exceeded. You can still delete it from the list above.</span><Link href="/pricing" className="font-bold underline underline-offset-4">Upgrade plan</Link></div>}<div className="mt-5 grid gap-3 sm:grid-cols-2"><StudioField label="Title"><input disabled={playlist.read_only} required maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="studio-input" /></StudioField><StudioField label="Visibility"><select disabled={playlist.read_only} value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "public" | "private" })} className="studio-input"><option value="public">Public</option><option value="private">Private</option></select></StudioField><StudioField label="Category"><select disabled={playlist.read_only} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="studio-input">{["release", "live", "behind_the_scenes", "other"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></StudioField><StudioField label="Description"><input disabled={playlist.read_only} maxLength={2000} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="studio-input" /></StudioField></div><div className="mt-5"><p className="text-sm font-semibold">Ordered videos</p><div className="mt-2 space-y-2">{videoIds.map((videoId, index) => { const video = availableVideos.find((item) => item.id === videoId); return <div key={videoId} className="flex items-center gap-2 rounded-xl bg-[var(--surface)] p-3"><span className="w-6 text-xs text-[var(--muted)]">{index + 1}</span><span className="min-w-0 flex-1 truncate text-sm">{video?.caption || `Video #${videoId}`}</span><button type="button" disabled={playlist.read_only || index === 0} onClick={() => move(index, -1)} className="icon-button" aria-label="Move up"><ArrowUp size={15} /></button><button type="button" disabled={playlist.read_only || index === videoIds.length - 1} onClick={() => move(index, 1)} className="icon-button" aria-label="Move down"><ArrowDown size={15} /></button><button type="button" disabled={playlist.read_only} onClick={() => setVideoIds((current) => current.filter((value) => value !== videoId))} className="icon-button" aria-label="Remove video"><Trash2 size={15} /></button></div>; })}</div><div className="mt-3 flex flex-wrap gap-2">{availableVideos.filter((video) => !videoIds.includes(video.id)).map((video) => <button type="button" disabled={playlist.read_only} key={video.id} onClick={() => setVideoIds((current) => [...current, video.id])} className="rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold">+ {video.caption || `Video #${video.id}`}</button>)}</div></div>{error && <div className="mt-4"><InlineError message={error} />{error.toLowerCase().includes("version") && <button type="button" onClick={onReload} className="text-sm font-bold text-[var(--royal)]">Reload latest version</button>}</div>}<button disabled={playlist.read_only || saving} className="primary-button mt-5">{saving && <LoaderCircle size={16} className="animate-spin" />} Save playlist</button></form>;
+  return (
+    <form onSubmit={save} className="mt-6 rounded-2xl border border-violet-500/20 bg-[var(--background)] p-5">
+      <div className="flex items-center justify-between">
+        <div><p className="text-xs font-bold uppercase tracking-wider text-[var(--royal)]">Playlist editor</p><h3 className="mt-1 text-lg font-semibold">{playlist.title}</h3></div>
+        <button type="button" onClick={onClose} className="text-sm font-bold text-[var(--muted)]">Close</button>
+      </div>
+
+      {playlist.read_only && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400"><span>This playlist is read-only because the current plan limit is exceeded. You can still delete it from the list above.</span><Link href="/pricing" className="font-bold underline underline-offset-4">Upgrade plan</Link></div>}
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <StudioField label="Title"><input disabled={playlist.read_only} required maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="studio-input" /></StudioField>
+        <StudioField label="Visibility"><select disabled={playlist.read_only} value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "public" | "private" })} className="studio-input"><option value="public">Public</option><option value="private">Private</option></select></StudioField>
+        <StudioField label="Category"><select disabled={playlist.read_only} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="studio-input">{["release", "live", "behind_the_scenes", "other"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></StudioField>
+        <StudioField label="Description"><input disabled={playlist.read_only} maxLength={2000} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="studio-input" /></StudioField>
+      </div>
+
+      <PlaylistVideoPicker videos={videos} videoIds={videoIds} disabled={Boolean(playlist.read_only)} onAdd={addVideo} onRemove={removeVideo} onReorder={reorderVideo} />
+
+      {error && <div className="mt-4"><InlineError message={error} />{error.toLowerCase().includes("version") && <button type="button" onClick={onReload} className="text-sm font-bold text-[var(--royal)]">Reload latest version</button>}</div>}
+      <button disabled={playlist.read_only || saving} className="primary-button mt-5">{saving && <LoaderCircle size={16} className="animate-spin" />} Save playlist</button>
+    </form>
+  );
+}
+
+function PlaylistVideoPicker({ videos, videoIds, disabled, onAdd, onRemove, onReorder }: { videos: Video[]; videoIds: number[]; disabled: boolean; onAdd: (id: number) => void; onRemove: (id: number) => void; onReorder: (sourceId: number, targetId: number) => void }) {
+  const videoById = new Map(videos.map((video) => [video.id, video]));
+  const available = videos.filter((video) => !videoIds.includes(video.id));
+  const maximumReached = videoIds.length >= 100;
+  const [draggedVideoId, setDraggedVideoId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
+
+  function finishDrag() {
+    setDraggedVideoId(null);
+    setDropTargetId(null);
+  }
+
+  function handleKeyboardReorder(event: React.KeyboardEvent<HTMLElement>, videoId: number, index: number) {
+    if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowDown")) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+    const targetId = videoIds[index + direction];
+    if (targetId) onReorder(videoId, targetId);
+  }
+
+  return (
+    <section className="mt-6 border-t border-[var(--line)] pt-5">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div><h4 className="text-sm font-semibold">Playlist order</h4><p className="mt-1 text-xs text-[var(--muted)]">Drag the cards to rearrange them. Keyboard: Alt + arrow keys.</p></div>
+        <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-bold text-[var(--royal)]">{videoIds.length}/100 selected</span>
+      </div>
+
+      {videoIds.length ? (
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          {videoIds.map((videoId, index) => {
+            const video = videoById.get(videoId);
+            const title = video?.caption || `Video #${videoId}`;
+            return (
+              <article
+                key={videoId}
+                draggable={!disabled}
+                tabIndex={disabled ? -1 : 0}
+                aria-label={`${title}, position ${index + 1} of ${videoIds.length}. Drag to reorder.`}
+                onKeyDown={(event) => handleKeyboardReorder(event, videoId, index)}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", String(videoId));
+                  setDraggedVideoId(videoId);
+                }}
+                onDragOver={(event) => {
+                  if (disabled || draggedVideoId === videoId) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropTargetId(videoId);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const sourceId = draggedVideoId ?? Number(event.dataTransfer.getData("text/plain"));
+                  if (sourceId && sourceId !== videoId) onReorder(sourceId, videoId);
+                  finishDrag();
+                }}
+                onDragEnd={finishDrag}
+                className={`flex min-w-0 items-center gap-3 rounded-xl border bg-violet-500/[0.05] p-2.5 outline-none transition ${disabled ? "border-violet-500/20" : "cursor-grab active:cursor-grabbing focus:ring-2 focus:ring-violet-400"} ${draggedVideoId === videoId ? "scale-[0.98] opacity-45" : ""} ${dropTargetId === videoId ? "border-violet-500 ring-2 ring-violet-400/45" : "border-violet-500/20"}`}
+              >
+                <PlaylistVideoThumbnail video={video} order={index + 1} />
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{title}</p><p className="mt-1 text-xs capitalize text-[var(--muted)]">{video?.processing_state ?? video?.status ?? "Selected release"} · {video?.publication_state ?? video?.visibility ?? "owned"}</p></div>
+                <div className="flex shrink-0 flex-col items-center gap-2">
+                  <span className="grid h-9 w-9 place-items-center rounded-lg text-[var(--muted)]" aria-hidden="true"><GripVertical size={20} /></span>
+                  <button type="button" disabled={disabled} onClick={() => onRemove(videoId)} className="icon-button text-pink-500" aria-label={`Remove ${title} from playlist`}><Trash2 size={15} /></button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-dashed border-[var(--line)] px-4 py-7 text-center"><ListMusic size={24} className="mx-auto text-[var(--muted)]" /><p className="mt-2 text-sm font-semibold">No releases selected</p><p className="mt-1 text-xs text-[var(--muted)]">Choose from your releases below to build this playlist.</p></div>
+      )}
+
+      <div className="mt-6"><h4 className="text-sm font-semibold">Add releases</h4><p className="mt-1 text-xs text-[var(--muted)]">Select an owned video to add it to the end of the playlist.</p></div>
+      {available.length ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {available.map((video) => {
+            const title = video.caption || `Video #${video.id}`;
+            return (
+              <button type="button" key={video.id} disabled={disabled || maximumReached} onClick={() => onAdd(video.id)} className="group flex min-w-0 items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-2.5 text-left transition hover:border-violet-400 hover:bg-violet-500/[0.04] disabled:cursor-not-allowed disabled:opacity-55">
+                <PlaylistVideoThumbnail video={video} />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs capitalize text-[var(--muted)]">{video.processing_state ?? video.status} · {video.publication_state ?? video.visibility}</span></span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-500/10 text-[var(--royal)] transition group-hover:bg-violet-600 group-hover:text-white"><Plus size={16} /></span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-xl bg-[var(--surface)] px-4 py-5 text-center text-sm text-[var(--muted)]">All available releases are already selected.</p>
+      )}
+      {maximumReached && <p className="mt-3 text-xs font-semibold text-amber-400">A playlist can contain up to 100 videos.</p>}
+    </section>
+  );
+}
+
+function PlaylistVideoThumbnail({ video, order }: { video?: Video; order?: number }) {
+  return <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-900">{video?.thumbnail_url ? <Image src={video.thumbnail_url} alt="" fill sizes="64px" className="object-cover" /> : <span className="absolute inset-0 grid place-items-center bg-[linear-gradient(145deg,#27272a,#18181b)] text-zinc-500"><Music2 size={20} /></span>}{order && <span className="absolute left-1.5 top-1.5 grid h-6 min-w-6 place-items-center rounded-md bg-black/75 px-1 text-[10px] font-black text-white">{order}</span>}</span>;
 }
 
 function AnnouncementsPanel({ token, userId, enabled }: { token: string; userId: number; enabled: boolean }) {
