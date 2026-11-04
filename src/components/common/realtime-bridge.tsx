@@ -17,7 +17,7 @@ export function RealtimeBridge() {
       if (eventId && seen.has(eventId)) return; if (eventId) { seen.add(eventId); if (seen.size > 500) seen.delete(seen.values().next().value!); }
       if (event === "message.created" || event === "conversation.updated") { void client.invalidateQueries({ queryKey: ["conversations", user.id] }); void client.invalidateQueries({ queryKey: ["messages", user.id] }); }
       if (event === "notification.created" || event === "notifications.updated") void client.invalidateQueries({ queryKey: ["notifications", user.id] });
-      if (event === "release.updated") void client.invalidateQueries({ queryKey: ["releases", user.id] });
+      if (event === "release.updated") { void client.invalidateQueries({ queryKey: ["releases", user.id] }); void client.invalidateQueries({ queryKey: ["my-videos", user.id] }); }
       if (event === "entitlements.updated") { void client.invalidateQueries({ queryKey: ["entitlements", user.id] }); void client.invalidateQueries({ queryKey: ["subscription", user.id] }); }
       if (event === "boost.updated" || event === "placement.updated") { void client.invalidateQueries({ queryKey: ["boosts", user.id] }); void client.invalidateQueries({ queryKey: ["boost-balance", user.id] }); }
     };
