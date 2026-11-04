@@ -33,10 +33,10 @@ import {
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { ApiError } from "@/services/api";
-import { fallbackTracks, searchMusicTracks } from "@/services/music";
+import { fallbackTracks, getSavedMusicTracks, searchMusicTracks } from "@/services/music";
 import { requestVideoUpload, uploadLocalAudio, uploadLocalVideo } from "@/services/uploads";
 import { createVideo } from "@/services/videos";
-import { createAudio } from "@/services/audio";
+import { createAudio, saveAudio, unsaveAudio, waitForAudioReady } from "@/services/audio";
 import { getPolicies } from "@/services/auth";
 import { cx } from "@/lib/format";
 import type { MusicTrack } from "@/types/api";
@@ -46,12 +46,13 @@ const maxSize = 500 * 1024 * 1024;
 const maxAudioSize = 50 * 1024 * 1024;
 const supportedTypes = ["video/mp4", "video/quicktime", "video/webm"];
 const supportedAudioTypes = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/aac", "audio/x-m4a", "audio/m4a", "audio/ogg", "audio/webm"];
-const customAudioId = "custom-upload";
+const customAudioTrackId = "custom-upload";
 
-type Step = "idle" | "preparing" | "uploading" | "publishing" | "done";
+type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "done";
 type PreviewMode = "feed" | "profile" | "web";
 type Visibility = "public" | "followers" | "private";
 type CropMode = "fill" | "fit";
+type SoundLibraryTab = "explore" | "saved";
 type FilterSettings = {
   brightness: number;
   contrast: number;
@@ -80,6 +81,8 @@ export function UploadVideoForm() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const submittingRef = useRef(false);
+  const soundRequestRef = useRef(0);
+  const soundTabRef = useRef<SoundLibraryTab>("explore");
   const { authenticated, loading, token, user } = useAuth();
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -98,13 +101,17 @@ export function UploadVideoForm() {
   const [rightsAccepted, setRightsAccepted] = useState(false);
   const [publicationIntent] = useState<"immediate" | "draft">(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("intent") === "draft" ? "draft" : "immediate");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("feed");
-  const [soundQuery, setSoundQuery] = useState("lofi");
+  const [soundQuery, setSoundQuery] = useState("");
   const [soundResults, setSoundResults] = useState<MusicTrack[]>(fallbackTracks);
+  const [soundTab, setSoundTab] = useState<SoundLibraryTab>("explore");
   const [selectedSound, setSelectedSound] = useState<MusicTrack>(fallbackTracks[0]);
   const [customAudioFile, setCustomAudioFile] = useState<File | null>(null);
+  const [customAudioApiId, setCustomAudioApiId] = useState<number | null>(null);
   const [customAudioPreviewUrl, setCustomAudioPreviewUrl] = useState<string | null>(null);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
+  const [savingSoundId, setSavingSoundId] = useState<string | null>(null);
   const [soundLoading, setSoundLoading] = useState(false);
+  const [soundError, setSoundError] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
   const [createdVideoId, setCreatedVideoId] = useState<number | null>(null);
@@ -255,21 +262,21 @@ export function UploadVideoForm() {
   }
 
   function selectCustomAudio(nextFile: File) {
-    setError("");
+    setSoundError("");
 
     if (!isSupportedAudioFile(nextFile)) {
-      setError("Please choose MP3, WAV, M4A, AAC, OGG, or WebM audio.");
+      setSoundError("Please choose MP3, WAV, M4A, AAC, OGG, or WebM audio.");
       return;
     }
 
     if (nextFile.size > maxAudioSize) {
-      setError("Audio must be 50 MB or smaller.");
+      setSoundError("Audio must be 50 MB or smaller.");
       return;
     }
 
     const audioUrl = URL.createObjectURL(nextFile);
     const track: MusicTrack = {
-      id: customAudioId,
+      id: customAudioTrackId,
       name: nextFile.name.replace(/\.[^/.]+$/, ""),
       artist: user?.username ?? "Custom audio",
       provider: "local",
@@ -278,23 +285,79 @@ export function UploadVideoForm() {
 
     pausePreview();
     setCustomAudioFile(nextFile);
+    setCustomAudioApiId(null);
     setCustomAudioPreviewUrl(audioUrl);
     setSelectedSound(track);
     setPlayingSoundId(null);
   }
 
-  async function handleSoundSearch() {
+  async function loadSoundTracks(tab: SoundLibraryTab, query = "") {
+    const requestId = ++soundRequestRef.current;
     setSoundLoading(true);
-    setError("");
+    setSoundError("");
 
     try {
-      const tracks = await searchMusicTracks(soundQuery);
+      const tracks = tab === "saved"
+        ? await getSavedMusicTracks(token!)
+        : await searchMusicTracks(query, token);
+      if (requestId !== soundRequestRef.current) return;
       setSoundResults(tracks.length ? tracks : fallbackTracks);
     } catch (caught) {
+      if (requestId !== soundRequestRef.current) return;
       setSoundResults(fallbackTracks);
-      setError(caught instanceof Error ? caught.message : "Could not load music tracks.");
+      setSoundError(caught instanceof Error ? caught.message : "Could not load sounds.");
     } finally {
-      setSoundLoading(false);
+      if (requestId === soundRequestRef.current) setSoundLoading(false);
+    }
+  }
+
+  function openSoundEditor() {
+    pausePreview();
+    setSoundEditorOpen(true);
+    void loadSoundTracks(soundTab, soundTab === "explore" ? soundQuery : "");
+  }
+
+  function closeSoundEditor() {
+    audioRef.current?.pause();
+    setPlayingSoundId(null);
+    setSoundEditorOpen(false);
+  }
+
+  function handleSoundSearch() {
+    void loadSoundTracks("explore", soundQuery);
+  }
+
+  function handleSoundTabChange(tab: SoundLibraryTab) {
+    soundTabRef.current = tab;
+    setSoundTab(tab);
+    setSoundQuery("");
+    setPlayingSoundId(null);
+    audioRef.current?.pause();
+    void loadSoundTracks(tab);
+  }
+
+  async function toggleSoundSaved(track: MusicTrack) {
+    if (!token || track.provider !== "library" || savingSoundId) return;
+
+    setSavingSoundId(track.id);
+    setSoundError("");
+
+    try {
+      const nextSaved = !track.saved;
+      if (nextSaved) await saveAudio(Number(track.id), token);
+      else await unsaveAudio(Number(track.id), token);
+
+      setSoundResults((current) => {
+        if (soundTabRef.current === "saved" && !nextSaved) {
+          return current.filter((item) => item.provider !== "library" || item.id !== track.id);
+        }
+        return current.map((item) => item.provider === "library" && item.id === track.id ? { ...item, saved: nextSaved } : item);
+      });
+      setSelectedSound((current) => current.provider === "library" && current.id === track.id ? { ...current, saved: nextSaved } : current);
+    } catch (caught) {
+      setSoundError(caught instanceof Error ? caught.message : "Could not update your saved sounds.");
+    } finally {
+      setSavingSoundId(null);
     }
   }
 
@@ -346,10 +409,27 @@ export function UploadVideoForm() {
       setStep("preparing");
       if (!rightsAccepted) throw new Error("Confirm the rights declaration before uploading.");
       const policyResponse = await getPolicies();
+      let audioId = selectedSound.provider === "library" ? Number(selectedSound.id) : undefined;
+
+      if (selectedSound.id === customAudioTrackId && customAudioFile) {
+        setStep("processing-audio");
+        let nextAudioId = customAudioApiId;
+
+        if (!nextAudioId) {
+          const audioUpload = await uploadLocalAudio(customAudioFile, token);
+          const audio = await createAudio({ storage_path: audioUpload.data.storage_path, title: selectedSound.name, reuse_allowed: reuseContent, rights_confirmed: true, rights_version: policyResponse.data.rights_version }, token);
+          nextAudioId = audio.data.id;
+          setCustomAudioApiId(nextAudioId);
+        }
+
+        const readyAudio = await waitForAudioReady(nextAudioId, token);
+        audioId = readyAudio.data.id;
+      }
+
+      setStep("uploading");
       const uploadPlan = await requestVideoUpload({ filename: file.name, content_type: file.type, publication_intent: publicationIntent }, token);
       let storagePath = "";
 
-      setStep("uploading");
       if (uploadPlan.data.upload_method === "signed_url") {
         const uploadResponse = await fetch(uploadPlan.data.upload_url, {
           method: "PUT",
@@ -365,14 +445,6 @@ export function UploadVideoForm() {
       } else {
         const localUpload = await uploadLocalVideo(file, token, publicationIntent);
         storagePath = localUpload.data.storage_path;
-      }
-
-      let audioId = selectedSound.provider === "library" ? Number(selectedSound.id) : undefined;
-
-      if (selectedSound.id === customAudioId && customAudioFile) {
-        const audioUpload = await uploadLocalAudio(customAudioFile, token);
-        const audio = await createAudio({ storage_path: audioUpload.data.storage_path, title: selectedSound.name, reuse_allowed: reuseContent, rights_confirmed: true, rights_version: policyResponse.data.rights_version }, token);
-        audioId = audio.data.id;
       }
 
       setStep("publishing");
@@ -435,12 +507,19 @@ export function UploadVideoForm() {
     setReuseContent(false);
     setRightsAccepted(false);
     setPreviewMode("feed");
-    setSoundQuery("lofi");
+    setSoundQuery("");
     setSoundResults(fallbackTracks);
+    soundRequestRef.current += 1;
+    soundTabRef.current = "explore";
+    setSoundTab("explore");
     setSelectedSound(fallbackTracks[0]);
     setCustomAudioFile(null);
+    setCustomAudioApiId(null);
     setCustomAudioPreviewUrl(null);
     setPlayingSoundId(null);
+    setSavingSoundId(null);
+    setSoundLoading(false);
+    setSoundError("");
     setTrimEditorOpen(false);
     setSoundEditorOpen(false);
     setFilterEditorOpen(false);
@@ -590,7 +669,7 @@ export function UploadVideoForm() {
 
             <div className="mb-4 grid grid-cols-3 gap-2">
               <ToolLauncher icon={<Scissors size={20} />} label="Edit" onClick={() => { pausePreview(); setTrimEditorOpen(true); }} disabled={!previewUrl} />
-              <ToolLauncher icon={<Music2 size={20} />} label="Sounds" onClick={() => { pausePreview(); setSoundEditorOpen(true); }} />
+              <ToolLauncher icon={<Music2 size={20} />} label="Sounds" onClick={openSoundEditor} />
               <ToolLauncher icon={<SlidersHorizontal size={20} />} label="Filters" onClick={() => { pausePreview(); setFilterEditorOpen(true); }} disabled={!previewUrl} />
             </div>
 
@@ -637,16 +716,20 @@ export function UploadVideoForm() {
           trimEnd={activeTrimEnd}
           query={soundQuery}
           tracks={soundResults}
+          tab={soundTab}
           selected={selectedSound}
           loading={soundLoading}
           playingId={playingSoundId}
-          selectedSoundArtist={selectedSoundArtist}
+          savingId={savingSoundId}
+          error={soundError}
           onQuery={setSoundQuery}
           onSearch={handleSoundSearch}
+          onTabChange={handleSoundTabChange}
           onSelect={selectSound}
           onPreview={previewSound}
+          onToggleSaved={toggleSoundSaved}
           onCustomAudio={selectCustomAudio}
-          onClose={() => setSoundEditorOpen(false)}
+          onClose={closeSoundEditor}
         />
       )}
       {filterEditorOpen && previewUrl && (
@@ -825,7 +908,7 @@ function EditorPreview({ previewUrl, cropMode, videoFilter, trimStart, trimEnd, 
   );
 }
 
-function SoundEditorModal(props: { title: string; previewUrl: string; cropMode: CropMode; videoFilter: string; trimStart: number; trimEnd: number; query: string; tracks: MusicTrack[]; selected: MusicTrack; loading: boolean; playingId: string | null; selectedSoundArtist: string | undefined; onQuery: (value: string) => void; onSearch: () => void; onSelect: (track: MusicTrack) => void; onPreview: (track: MusicTrack) => void; onCustomAudio: (file: File) => void; onClose: () => void }) {
+function SoundEditorModal(props: { title: string; previewUrl: string; cropMode: CropMode; videoFilter: string; trimStart: number; trimEnd: number; query: string; tracks: MusicTrack[]; tab: SoundLibraryTab; selected: MusicTrack; loading: boolean; playingId: string | null; savingId: string | null; error: string; onQuery: (value: string) => void; onSearch: () => void; onTabChange: (tab: SoundLibraryTab) => void; onSelect: (track: MusicTrack) => void; onPreview: (track: MusicTrack) => void; onToggleSaved: (track: MusicTrack) => void; onCustomAudio: (file: File) => void; onClose: () => void }) {
   const selectedSoundUrl = props.selected.provider !== "original" ? props.selected.preview_url : undefined;
 
   return (
@@ -840,7 +923,7 @@ function SoundEditorModal(props: { title: string; previewUrl: string; cropMode: 
             <button type="button" onClick={props.onClose} className="grid h-8 w-8 place-items-center rounded-md hover:bg-zinc-100" aria-label="Close sounds"><X size={18} /></button>
           </div>
           <div className="min-h-0 flex-1 p-4">
-            <SoundTools query={props.query} tracks={props.tracks} selected={props.selected} loading={props.loading} playingId={props.playingId} onQuery={props.onQuery} onSearch={props.onSearch} onSelect={props.onSelect} onPreview={props.onPreview} onCustomAudio={props.onCustomAudio} />
+            <SoundTools query={props.query} tracks={props.tracks} tab={props.tab} selected={props.selected} loading={props.loading} playingId={props.playingId} savingId={props.savingId} error={props.error} onQuery={props.onQuery} onSearch={props.onSearch} onTabChange={props.onTabChange} onSelect={props.onSelect} onPreview={props.onPreview} onToggleSaved={props.onToggleSaved} onCustomAudio={props.onCustomAudio} />
           </div>
         </aside>
       }
@@ -1272,10 +1355,30 @@ function TrimCutEditorModal({
   );
 }
 
-function SoundTools(props: { query: string; tracks: MusicTrack[]; selected: MusicTrack; loading: boolean; playingId: string | null; onQuery: (value: string) => void; onSearch: () => void; onSelect: (track: MusicTrack) => void; onPreview: (track: MusicTrack) => void; onCustomAudio: (file: File) => void }) {
+type SoundToolsProps = {
+  query: string;
+  tracks: MusicTrack[];
+  tab: SoundLibraryTab;
+  selected: MusicTrack;
+  loading: boolean;
+  playingId: string | null;
+  savingId: string | null;
+  error: string;
+  onQuery: (value: string) => void;
+  onSearch: () => void;
+  onTabChange: (tab: SoundLibraryTab) => void;
+  onSelect: (track: MusicTrack) => void;
+  onPreview: (track: MusicTrack) => void;
+  onToggleSaved: (track: MusicTrack) => void;
+  onCustomAudio: (file: File) => void;
+};
+
+function SoundTools(props: SoundToolsProps) {
   const audioInputRef = useRef<HTMLInputElement>(null);
   const selectedInResults = props.tracks.some((track) => track.id === props.selected.id && track.provider === props.selected.provider);
-  const visibleTracks = selectedInResults ? props.tracks : [props.selected, ...props.tracks];
+  const showSelectedTrack = !selectedInResults && (props.tab === "explore" || props.selected.provider !== "library");
+  const visibleTracks = showSelectedTrack ? [props.selected, ...props.tracks] : props.tracks;
+  const hasLibraryTracks = visibleTracks.some((track) => track.provider === "library");
 
   function handleCustomAudioChange(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0];
@@ -1285,30 +1388,79 @@ function SoundTools(props: { query: string; tracks: MusicTrack[]; selected: Musi
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-3 pb-3">
-        <ToolTitle icon={<Music2 size={16} />} text="Sounds" />
-        <button type="button" onClick={() => audioInputRef.current?.click()} className="flex w-full items-center gap-3 rounded-md border border-dashed border-violet-300 bg-violet-50 px-3 py-3 text-left transition hover:bg-violet-100">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-[var(--royal)] shadow-sm"><UploadCloud size={17} /></span>
+      <div className="shrink-0 space-y-3 pb-4">
+        <button type="button" onClick={() => audioInputRef.current?.click()} className="flex w-full items-center gap-3 rounded-lg border border-dashed border-violet-300 bg-violet-50/80 px-3 py-3 text-left transition hover:border-violet-400 hover:bg-violet-100">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[var(--royal)] shadow-sm ring-1 ring-violet-100"><UploadCloud size={18} /></span>
           <span className="min-w-0">
             <span className="block text-sm font-black text-zinc-950">Upload custom audio</span>
             <span className="block truncate text-xs font-medium text-zinc-500">MP3, WAV, M4A, AAC, OGG, or WebM up to 50 MB</span>
           </span>
         </button>
         <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/aac,audio/x-m4a,audio/m4a,audio/ogg,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.webm" className="hidden" onChange={handleCustomAudioChange} />
-        <div className="flex gap-2">
-          <input value={props.query} onChange={(event) => props.onQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onSearch(); } }} placeholder="Search free music" className="h-10 min-w-0 flex-1 rounded-md bg-zinc-100 px-3 text-sm outline-none focus:ring-2 focus:ring-violet-300" />
-          <button type="button" onClick={props.onSearch} className="grid h-10 w-10 place-items-center rounded-md bg-zinc-950 text-white" aria-label="Search sounds">{props.loading ? <LoaderCircle size={17} className="animate-spin" /> : <Search size={17} />}</button>
+
+        <div className="grid grid-cols-2 rounded-lg bg-zinc-100 p-1 text-xs font-black">
+          <button type="button" onClick={() => props.onTabChange("explore")} className={cx("h-9 rounded-md transition", props.tab === "explore" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500 hover:text-zinc-800")}>Explore</button>
+          <button type="button" onClick={() => props.onTabChange("saved")} className={cx("flex h-9 items-center justify-center gap-1.5 rounded-md transition", props.tab === "saved" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500 hover:text-zinc-800")}><Bookmark size={14} />Saved</button>
         </div>
+
+        {props.tab === "explore" ? (
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input value={props.query} onChange={(event) => props.onQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onSearch(); } }} placeholder="Search sounds by title" maxLength={100} className="h-10 w-full rounded-md bg-zinc-100 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <button type="button" onClick={props.onSearch} disabled={props.loading} className="grid h-10 w-10 place-items-center rounded-md bg-zinc-950 text-white transition hover:bg-zinc-800 disabled:opacity-60" aria-label="Search sounds">{props.loading ? <LoaderCircle size={17} className="animate-spin" /> : <Search size={17} />}</button>
+          </div>
+        ) : (
+          <p className="px-1 text-xs font-medium text-zinc-500">Sounds you saved from other creators.</p>
+        )}
+
+        {props.error && <p role="alert" className="rounded-md border border-pink-200 bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-700">{props.error}</p>}
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 [scrollbar-color:#c4b5fd_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-violet-300">
-        {visibleTracks.map((track) => <div key={`${track.provider}-${track.id}`} className={cx("rounded-md border p-3", props.selected.id === track.id && props.selected.provider === track.provider ? "border-violet-300 bg-violet-50" : "border-zinc-200")}> <div className="flex items-center justify-between gap-2"><button type="button" onClick={() => props.onSelect(track)} className="min-w-0 text-left"><span className="block truncate text-sm font-black">{track.name}</span><span className="block truncate text-xs text-zinc-500">{track.artist}</span>{track.license_url && <span className="block truncate text-[10px] text-zinc-400">Creative Commons</span>}</button><button type="button" onClick={() => props.onPreview(track)} className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-900", props.playingId === track.id ? "bg-violet-200" : "bg-zinc-100")} aria-label="Preview sound">{props.playingId === track.id ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button></div>{props.selected.id === track.id && props.selected.provider === track.provider && <p className="mt-2 text-xs font-bold text-violet-700">Selected</p>}</div>)}
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1 [scrollbar-color:#c4b5fd_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-violet-300">
+        {props.loading && <div className="flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 py-4 text-xs font-semibold text-zinc-500"><LoaderCircle size={16} className="animate-spin" />Loading sounds...</div>}
+
+        {visibleTracks.map((track) => {
+          const selected = props.selected.id === track.id && props.selected.provider === track.provider;
+          const libraryTrack = track.provider === "library";
+          const saving = props.savingId === track.id;
+
+          return (
+            <div key={`${track.provider}-${track.id}`} className={cx("rounded-lg border p-3 transition", selected ? "border-violet-300 bg-violet-50 shadow-sm" : "border-zinc-200 bg-white hover:border-zinc-300")}>
+              <div className="flex items-center gap-2.5">
+                <button type="button" onClick={() => props.onSelect(track)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <span className={cx("grid h-10 w-10 shrink-0 place-items-center rounded-lg", selected ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600")}><Music2 size={18} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-black text-zinc-950">{track.name}</span>
+                    <span className="block truncate text-xs font-medium text-zinc-500">{track.artist}</span>
+                    {libraryTrack && <span className="mt-0.5 block truncate text-[10px] font-semibold text-zinc-400">{track.duration ? formatSeconds(track.duration) : "Sound"}{typeof track.videos_count === "number" ? ` · ${track.videos_count} ${track.videos_count === 1 ? "video" : "videos"}` : ""}</span>}
+                  </span>
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  {libraryTrack && (
+                    <button type="button" onClick={() => props.onToggleSaved(track)} disabled={saving} className={cx("grid h-8 w-8 place-items-center rounded-full transition", track.saved ? "bg-violet-100 text-violet-700" : "bg-zinc-100 text-zinc-600 hover:bg-violet-50 hover:text-violet-700", saving && "opacity-60")} aria-label={track.saved ? `Remove ${track.name} from saved sounds` : `Save ${track.name}`}>
+                      {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Bookmark size={15} fill={track.saved ? "currentColor" : "none"} />}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => props.onPreview(track)} disabled={!track.preview_url && track.provider !== "original"} className={cx("grid h-8 w-8 place-items-center rounded-full text-zinc-900 transition disabled:cursor-not-allowed disabled:opacity-40", props.playingId === track.id ? "bg-violet-200" : "bg-zinc-100 hover:bg-zinc-200")} aria-label={`Preview ${track.name}`}>{props.playingId === track.id ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button>
+                </div>
+              </div>
+              {selected && <p className="mt-2 pl-[52px] text-[11px] font-black text-violet-700">Selected for this video</p>}
+            </div>
+          );
+        })}
+
+        {!props.loading && !hasLibraryTracks && (
+          <div className="rounded-lg border border-dashed border-zinc-300 px-4 py-6 text-center">
+            <Bookmark className="mx-auto mb-2 text-zinc-300" size={24} />
+            <p className="text-sm font-black text-zinc-700">{props.tab === "saved" ? "No saved sounds yet" : "No sounds found"}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">{props.tab === "saved" ? "Explore the audio library and bookmark sounds to find them here." : "Try a different title or clear your search."}</p>
+          </div>
+        )}
       </div>
     </div>
   );
-}
-
-function ToolTitle({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return <p className="flex items-center gap-2 text-sm font-black">{icon}{text}</p>;
 }
 
 function SliderControl({ label, min, max, step, value, onChange, suffix = "" }: { label: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void; suffix?: string }) {
@@ -1426,6 +1578,7 @@ function clamp(value: number, min: number, max: number) {
 
 function stepLabel(step: Step) {
   if (step === "preparing") return "Preparing upload";
+  if (step === "processing-audio") return "Processing audio";
   if (step === "uploading") return "Uploading video";
   if (step === "publishing") return "Publishing";
   if (step === "done") return "Published";
@@ -1434,6 +1587,7 @@ function stepLabel(step: Step) {
 
 function stepPercent(step: Step) {
   if (step === "preparing") return 20;
+  if (step === "processing-audio") return 42;
   if (step === "uploading") return 64;
   if (step === "publishing") return 88;
   if (step === "done") return 100;

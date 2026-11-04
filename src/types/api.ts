@@ -105,6 +105,9 @@ export type MusicTrack = {
   artwork_url?: string;
   duration?: number;
   license_url?: string;
+  saved?: boolean;
+  videos_count?: number;
+  origin?: AudioTrack["origin"];
 };
 
 export type AudioTrack = {
@@ -112,7 +115,7 @@ export type AudioTrack = {
   title: string;
   audio_url: string | null;
   duration: number | null;
-  origin: "original" | "uploaded" | "library";
+  origin: "original" | "upload" | "library";
   status: "processing" | "ready" | "failed" | "withdrawn";
   reuse_allowed: boolean;
   moderation_status: string;
