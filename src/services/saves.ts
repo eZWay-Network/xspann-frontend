@@ -7,8 +7,8 @@ export type SaveResponse = {
   created?: boolean;
 };
 
-export function getSavedVideos(token: string, limit = 20) {
-  return apiRequest<PaginatedResponse<Video>>(`/me/saved-videos?limit=${limit}`, { token });
+export function getSavedVideos(token: string, limit = 20, page = 1) {
+  return apiRequest<PaginatedResponse<Video>>(`/me/saved-videos?page=${page}&limit=${limit}`, { token });
 }
 
 export function saveVideo(videoId: number, token: string) {

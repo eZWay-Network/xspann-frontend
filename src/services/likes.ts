@@ -7,8 +7,8 @@ export type LikeResponse = {
   created?: boolean;
 };
 
-export function getLikedVideos(token: string, limit = 20) {
-  return apiRequest<PaginatedResponse<Video>>(`/me/liked-videos?limit=${limit}`, { token });
+export function getLikedVideos(token: string, limit = 20, page = 1) {
+  return apiRequest<PaginatedResponse<Video>>(`/me/liked-videos?page=${page}&limit=${limit}`, { token });
 }
 
 export function likeVideo(videoId: number, token: string) {

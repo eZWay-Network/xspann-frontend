@@ -5,7 +5,7 @@ export const fallbackTracks: MusicTrack[] = [
   { id: "original", name: "Original sound", artist: "Your video audio", provider: "original" },
 ];
 
-function toMusicTrack(audio: AudioTrack): MusicTrack {
+export function toMusicTrack(audio: AudioTrack): MusicTrack {
   return {
     id: String(audio.id),
     name: audio.title,

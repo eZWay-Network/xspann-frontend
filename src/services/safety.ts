@@ -20,6 +20,24 @@ export type ReportVideoPayload = {
   details?: string;
 };
 
+export type ReportTarget =
+  | { reported_user_id: number }
+  | { video_id: number }
+  | { audio_id: number }
+  | { comment_id: number }
+  | { playlist_id: number }
+  | { message_id: number }
+  | { announcement_id: number }
+  | { boost_id: number };
+
+export function reportTarget(target: ReportTarget, payload: { reason: string; details?: string }, token: string) {
+  return apiRequest<SingleResponse<ReportResponse>>("/reports", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ ...target, reason: payload.reason, details: payload.details || null }),
+  });
+}
+
 export function getBlockedUsers(token: string, limit = 100) {
   return apiRequest<PaginatedResponse<UserSummary>>(`/me/blocks?limit=${limit}`, { token });
 }
@@ -39,25 +57,9 @@ export function unblockUser(userId: number, token: string) {
 }
 
 export function reportUser(userId: number, payload: ReportUserPayload, token: string) {
-  return apiRequest<SingleResponse<ReportResponse>>("/reports", {
-    method: "POST",
-    token,
-    body: JSON.stringify({
-      reported_user_id: userId,
-      reason: payload.reason,
-      details: payload.details || null,
-    }),
-  });
+  return reportTarget({ reported_user_id: userId }, payload, token);
 }
 
 export function reportVideo(videoId: number, payload: ReportVideoPayload, token: string) {
-  return apiRequest<SingleResponse<ReportResponse>>("/reports", {
-    method: "POST",
-    token,
-    body: JSON.stringify({
-      video_id: videoId,
-      reason: payload.reason,
-      details: payload.details || null,
-    }),
-  });
+  return reportTarget({ video_id: videoId }, payload, token);
 }

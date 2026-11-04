@@ -260,7 +260,7 @@ export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOpt
               <VideoDetail label="Visibility" value={capitalize(video.visibility)} />
               {video.duration !== null && <VideoDetail label="Duration" value={formatDuration(video.duration)} />}
               {video.location_name && <VideoDetail label="Location" value={video.location_name} icon={<MapPin size={15} />} />}
-              <VideoDetail label="Sound" value={video.audio?.title ?? "Original sound"} icon={<Music size={15} />} />
+              <VideoDetail label="Sound" value={video.audio ? <Link href={`/sounds/${video.audio.id}`} className="text-[var(--royal)] hover:underline">{video.audio.title}</Link> : "Original sound"} icon={<Music size={15} />} />
             </dl>
           </div>
         </DialogContent>
@@ -363,7 +363,7 @@ function VideoStat({ icon, label, value }: { icon: React.ReactNode; label: strin
   );
 }
 
-function VideoDetail({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function VideoDetail({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-3 text-sm">
       <dt className="text-[var(--muted)]">{label}</dt>

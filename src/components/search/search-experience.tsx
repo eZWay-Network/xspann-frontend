@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Search, Play, X } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Search, Play, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
@@ -12,6 +12,8 @@ import { compactNumber, cx } from "@/lib/format";
 import { trendingTags } from "@/lib/mock-data";
 import { getDiscoverVideos } from "@/services/videos";
 import { SponsoredStrip } from "@/components/promotions/sponsored-strip";
+import { discoverPeople } from "@/services/users";
+import { UserAvatar } from "@/components/common/user-avatar";
 
 export function SearchExperience() {
   const searchParams = useSearchParams();
@@ -50,6 +52,12 @@ function SearchResults({ initialQuery }: { initialQuery: string }) {
     })) ?? [];
   }, [feed.data]);
   const total = feed.data?.pages[0]?.meta.total ?? 0;
+  const people = useQuery({
+    queryKey: ["discover-people", user?.id ?? "guest", searchTerm],
+    enabled: !loading && Boolean(searchTerm),
+    queryFn: () => discoverPeople(searchTerm, 1, 8, token),
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     const root = scrollerRef.current;
@@ -76,6 +84,7 @@ function SearchResults({ initialQuery }: { initialQuery: string }) {
           {trendingTags.map((tag) => <button type="button" key={tag} onClick={() => setQuery(query === tag ? "" : tag)} aria-pressed={query === tag} className={cx("rounded-full px-3.5 py-2 text-xs font-medium transition", query === tag ? "bg-violet-500/10 text-[var(--royal)]" : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)]")}>{tag}</button>)}
         </div>
         <SponsoredStrip />
+        {searchTerm && !people.isPending && Boolean(people.data?.data.length) && <section className="mb-7"><div className="mb-3 flex items-center gap-2"><UserRound size={17} className="text-[var(--royal)]" /><h2 className="text-sm font-semibold">People</h2></div><div className="no-scrollbar flex gap-3 overflow-x-auto pb-2">{people.data?.data.map((person) => <Link key={person.id} href={`/profile/${person.username}`} className="flex w-52 shrink-0 items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3"><UserAvatar src={person.avatar} size={42} /><span className="min-w-0"><span className="block truncate text-sm font-semibold">{person.name || `@${person.username}`}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">@{person.username} · {person.followers_count ?? 0} followers</span></span></Link>)}</div></section>}
         {!feed.isPending && <p role="status" className="mb-4 text-xs text-[var(--muted)]">{searchTerm ? `${total} matching ${total === 1 ? "video" : "videos"} in discovery` : "Explore videos"}</p>}
         {feed.isPending && <div className="flex min-h-56 items-center justify-center"><XpnLoader label="Finding videos..." /></div>}
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">

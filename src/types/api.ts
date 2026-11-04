@@ -69,18 +69,10 @@ export type Video = {
   publication_intent?: "draft" | "immediate";
   published_at?: string | null;
   version?: number;
-  // Compatibility fields for older locally cached responses.
-  sound_name?: string | null;
-  sound_artist?: string | null;
-  sound_provider?: "original" | "local" | null;
-  sound_external_id?: string | null;
-  sound_preview_url?: string | null;
-  music?: string;
   tags: string[];
   location_name: string | null;
   visibility: "public" | "followers" | "private";
   high_quality_upload: boolean;
-  scheduled_at: string | null;
   pinned_at: string | null;
   edit: {
     trim_start: number | null;
@@ -245,7 +237,8 @@ export type CheckoutStatus = { reference: string; status: string; payment_status
 export type Release = Video & {
   version: number; processing_state: "processing" | "ready" | "failed";
   publication_state: "draft" | "scheduled" | "published"; moderation_status: string;
-  error_code?: string | null; scheduled_at?: string | null; paused_reason?: string | null;
+  error_code?: string | null; publish_at?: string | null; timezone?: string | null; paused_reason?: string | null;
+  preview?: { video: string | null; thumbnail: string | null; original_audio: string | null };
 };
 
 export type ConversationMessage = {

@@ -319,9 +319,13 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                         .map((tag) => `#${tag.replace("#", "")}`)
                         .join(" ")}
                     </p>
-                    <div className="mt-2.5 flex items-center gap-2 text-xs text-white/75">
-                      <Music size={13} className="shrink-0" /> <span className="truncate">{video.audio?.title ?? "Original sound"}</span>
-                    </div>
+                    {video.audio ? (
+                      <Link href={`/sounds/${video.audio.id}`} className="mt-2.5 flex w-fit max-w-full items-center gap-2 text-xs text-white/75 transition hover:text-white">
+                        <Music size={13} className="shrink-0" /> <span className="truncate">{video.audio.title}</span>
+                      </Link>
+                    ) : (
+                      <div className="mt-2.5 flex items-center gap-2 text-xs text-white/75"><Music size={13} className="shrink-0" /> <span>Original sound</span></div>
+                    )}
                   </div>
                 </div>
 
@@ -425,37 +429,12 @@ function VideoPlayer({
   onToggleMuted: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const progressTrackRef = useRef<HTMLDivElement>(null);
   const isDraggingProgressRef = useRef(false);
-  const lastVideoTimeRef = useRef(0);
   const [progress, setProgress] = useState(0);
   const [isDraggingProgress, setIsDraggingProgress] = useState(false);
-  // Published videos already contain their final encoded mix; never play a second preview track.
-  const hasExternalSound = false;
-  const trimStart = video.edit.trim_start ?? 0;
-  const trimEnd = video.edit.trim_end;
   const filterStyle = buildVideoFilter(video.edit.filter_settings);
   const cropClass = video.edit.crop_mode === "fit" ? "object-contain" : "object-cover";
-
-  const syncAudioToVideo = useCallback(() => {
-    const element = videoRef.current;
-    const audio = audioRef.current;
-    if (!element || !audio) return;
-
-    const audioDuration =
-      Number.isFinite(audio.duration) && audio.duration > 0
-        ? audio.duration
-        : 0;
-
-    try {
-      audio.currentTime = audioDuration
-        ? element.currentTime % audioDuration
-        : element.currentTime;
-    } catch {
-      // Some browsers reject currentTime changes before audio metadata is ready.
-    }
-  }, []);
 
   const updateProgress = useCallback(() => {
     const element = videoRef.current;
@@ -464,45 +443,27 @@ function VideoPlayer({
       return;
     }
 
-    const duration = getPlayableDuration(element, video.duration, trimStart, trimEnd);
-    const currentTime = Math.max(0, element.currentTime - trimStart);
+    const duration = getPlayableDuration(element, video.duration, 0, null);
+    const currentTime = Math.max(0, element.currentTime);
     const nextProgress = duration
       ? clampProgress(currentTime / duration)
       : 0;
-
-    if (trimEnd && element.currentTime >= trimEnd) {
-      element.currentTime = trimStart;
-      syncAudioToVideo();
-      setProgress(0);
-      return;
-    }
-
-    if (
-      hasExternalSound &&
-      element.currentTime + 0.25 < lastVideoTimeRef.current
-    ) {
-      syncAudioToVideo();
-    }
-
-    lastVideoTimeRef.current = element.currentTime;
     setProgress(nextProgress);
-  }, [hasExternalSound, syncAudioToVideo, trimEnd, trimStart, video.duration]);
+  }, [video.duration]);
 
   const seekToProgress = useCallback(
     (nextProgress: number) => {
       const element = videoRef.current;
       if (!element) return;
 
-      const duration = getPlayableDuration(element, video.duration, trimStart, trimEnd);
+      const duration = getPlayableDuration(element, video.duration, 0, null);
       if (!duration) return;
 
       const safeProgress = clampProgress(nextProgress);
-      element.currentTime = trimStart + duration * safeProgress;
-      lastVideoTimeRef.current = element.currentTime;
+      element.currentTime = duration * safeProgress;
       setProgress(safeProgress);
-      syncAudioToVideo();
     },
-    [syncAudioToVideo, trimEnd, trimStart, video.duration],
+    [video.duration],
   );
 
   const seekToPointer = useCallback(
@@ -577,31 +538,17 @@ function VideoPlayer({
 
   function handleToggleMuted() {
     const element = videoRef.current;
-    const audio = audioRef.current;
     const nextMuted = !muted;
 
     onToggleMuted();
-
-    if (nextMuted) {
-      audio?.pause();
-      return;
-    }
-
     if (element) {
-      element.muted = hasExternalSound;
+      element.muted = nextMuted;
       void element.play().catch(() => undefined);
-    }
-
-    if (audio && hasExternalSound) {
-      audio.muted = false;
-      syncAudioToVideo();
-      void audio.play().catch(() => undefined);
     }
   }
 
   useEffect(() => {
     const element = videoRef.current;
-    const audio = audioRef.current;
     if (!element) return;
 
     if (shouldPreload && element.networkState === HTMLMediaElement.NETWORK_EMPTY) {
@@ -610,33 +557,14 @@ function VideoPlayer({
 
     if (paused || !isActive) {
       element.pause();
-      audio?.pause();
       return;
     }
 
-    if (element.currentTime < trimStart || (trimEnd && element.currentTime >= trimEnd)) {
-      element.currentTime = trimStart;
-    }
-
     void element.play().catch(() => undefined);
-
-    if (audio) {
-      if (muted || !hasExternalSound) {
-        audio.pause();
-      } else {
-        syncAudioToVideo();
-        void audio.play().catch(() => undefined);
-      }
-    }
   }, [
-    hasExternalSound,
     isActive,
-    muted,
     paused,
     shouldPreload,
-    syncAudioToVideo,
-    trimEnd,
-    trimStart,
     video.video_url,
   ]);
 
@@ -648,10 +576,7 @@ function VideoPlayer({
     }
 
     const handleProgressUpdate = () => updateProgress();
-    const handleSeeked = () => {
-      updateProgress();
-      syncAudioToVideo();
-    };
+    const handleSeeked = () => updateProgress();
 
     updateProgress();
     element.addEventListener("loadedmetadata", handleProgressUpdate);
@@ -665,7 +590,7 @@ function VideoPlayer({
       element.removeEventListener("timeupdate", handleProgressUpdate);
       element.removeEventListener("seeked", handleSeeked);
     };
-  }, [syncAudioToVideo, updateProgress, video.video_url]);
+  }, [updateProgress, video.video_url]);
 
   return (
     <>
@@ -674,7 +599,7 @@ function VideoPlayer({
           ref={videoRef}
           src={shouldPreload ? video.video_url : undefined}
           poster={video.thumbnail_url ?? undefined}
-          muted={muted || hasExternalSound}
+          muted={muted}
           playsInline
           loop
           autoPlay={isActive && !paused}
@@ -690,15 +615,6 @@ function VideoPlayer({
           sizes="(max-width: 768px) 100vw, 526px"
           className={cropClass}
           priority={priority}
-        />
-      )}
-
-      {hasExternalSound && (
-        <audio
-          ref={audioRef}
-          src={shouldPreload ? video.sound_preview_url ?? undefined : undefined}
-          loop
-          preload={shouldPreload ? "metadata" : "none"}
         />
       )}
 

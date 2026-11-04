@@ -1,6 +1,7 @@
 import type { PaginatedResponse, SingleResponse, Video } from "@/types/api";
 import { videos } from "@/lib/mock-data";
 import { apiRequest } from "./api";
+import { videoProcessingOutcome } from "@/lib/video-processing";
 
 export async function getMockVideos(): Promise<PaginatedResponse<Video>> {
   return { data: videos, meta: { current_page: 1, last_page: 1, per_page: videos.length, total: videos.length } };
@@ -42,7 +43,6 @@ export type CreateVideoPayload = {
   location_name?: string;
   visibility?: "public" | "followers" | "private";
   high_quality_upload?: boolean;
-  scheduled_at?: string;
   trim_start?: number;
   trim_end?: number;
   cut_points?: number[];
@@ -95,4 +95,31 @@ export function recordVideoView(id: number, token?: string | null) {
     method: "POST",
     token,
   });
+}
+
+const videoProcessingPollDelays = Array.from(
+  { length: 14 },
+  (_, attempt) => Math.min(5_000, 1_000 * 1.45 ** attempt),
+);
+
+export async function waitForOwnedVideoReady(
+  id: number,
+  intent: "immediate" | "draft",
+  token: string,
+) {
+  for (let attempt = 0; attempt <= videoProcessingPollDelays.length; attempt += 1) {
+    const response = await getMyVideos(token, 100);
+    const video = response.data.find((item) => item.id === id);
+
+    if (video) {
+      const outcome = videoProcessingOutcome(video, intent);
+      if (outcome === "published" || outcome === "draft-ready") return video;
+      if (outcome === "failed") throw new Error("Video processing failed. Open My Posts to review the failure and retry options.");
+    }
+
+    if (attempt === videoProcessingPollDelays.length) break;
+    await new Promise((resolve) => setTimeout(resolve, videoProcessingPollDelays[attempt]));
+  }
+
+  return null;
 }

@@ -33,14 +33,14 @@ import {
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { ApiError } from "@/services/api";
-import { fallbackTracks, getSavedMusicTracks, searchMusicTracks } from "@/services/music";
+import { fallbackTracks, getSavedMusicTracks, searchMusicTracks, toMusicTrack } from "@/services/music";
 import { requestVideoUpload, uploadLocalAudio, uploadLocalVideo } from "@/services/uploads";
-import { createVideo } from "@/services/videos";
-import { createAudio, saveAudio, unsaveAudio, waitForAudioReady } from "@/services/audio";
+import { createVideo, waitForOwnedVideoReady } from "@/services/videos";
+import { createAudio, getAudio, saveAudio, unsaveAudio, waitForAudioReady } from "@/services/audio";
 import { getPolicies } from "@/services/auth";
 import { cx } from "@/lib/format";
 import type { MusicTrack } from "@/types/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const maxSize = 500 * 1024 * 1024;
 const maxAudioSize = 50 * 1024 * 1024;
@@ -48,7 +48,8 @@ const supportedTypes = ["video/mp4", "video/quicktime", "video/webm"];
 const supportedAudioTypes = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/aac", "audio/x-m4a", "audio/m4a", "audio/ogg", "audio/webm"];
 const customAudioTrackId = "custom-upload";
 
-type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "done";
+type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "processing-video" | "done";
+type CreatedVideoStatus = "processing" | "published" | "draft-ready" | "failed";
 type PreviewMode = "feed" | "profile" | "web";
 type Visibility = "public" | "followers" | "private";
 type CropMode = "fill" | "fit";
@@ -83,8 +84,10 @@ export function UploadVideoForm() {
   const submittingRef = useRef(false);
   const soundRequestRef = useRef(0);
   const soundTabRef = useRef<SoundLibraryTab>("explore");
+  const initialAudioLoadedRef = useRef(false);
   const { authenticated, loading, token, user } = useAuth();
   const queryClient = useQueryClient();
+  const policies = useQuery({ queryKey: ["policies"], queryFn: getPolicies, staleTime: 5 * 60_000 });
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
@@ -115,6 +118,7 @@ export function UploadVideoForm() {
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
   const [createdVideoId, setCreatedVideoId] = useState<number | null>(null);
+  const [createdVideoStatus, setCreatedVideoStatus] = useState<CreatedVideoStatus | null>(null);
   const [trimEditorOpen, setTrimEditorOpen] = useState(false);
   const [soundEditorOpen, setSoundEditorOpen] = useState(false);
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
@@ -130,6 +134,23 @@ export function UploadVideoForm() {
       if (customAudioPreviewUrl) URL.revokeObjectURL(customAudioPreviewUrl);
     };
   }, [customAudioPreviewUrl]);
+
+  useEffect(() => {
+    if (initialAudioLoadedRef.current || typeof window === "undefined") return;
+    const audioId = Number(new URLSearchParams(window.location.search).get("audio"));
+    if (!Number.isInteger(audioId) || audioId < 1) return;
+
+    initialAudioLoadedRef.current = true;
+    void getAudio(audioId, token).then((response) => {
+      if (response.data.status !== "ready" || !response.data.reuse_allowed) {
+        setSoundError("This sound is not currently available for new videos.");
+        return;
+      }
+      const track = toMusicTrack(response.data);
+      setSelectedSound(track);
+      setSoundResults([fallbackTracks[0], track]);
+    }).catch(() => setSoundError("The selected sound could not be loaded."));
+  }, [token]);
 
   const submitting = step !== "idle" && step !== "done";
   const selectedSoundArtist = selectedSound.provider === "original" ? user?.username : selectedSound.artist;
@@ -408,7 +429,7 @@ export function UploadVideoForm() {
       setError("");
       setStep("preparing");
       if (!rightsAccepted) throw new Error("Confirm the rights declaration before uploading.");
-      const policyResponse = await getPolicies();
+      const policyResponse = policies.data ?? await getPolicies();
       let audioId = selectedSound.provider === "library" ? Number(selectedSound.id) : undefined;
 
       if (selectedSound.id === customAudioTrackId && customAudioFile) {
@@ -469,6 +490,17 @@ export function UploadVideoForm() {
 
       clearFile();
       setCreatedVideoId(video.data.id);
+      setCreatedVideoStatus("processing");
+      setStep("processing-video");
+
+      try {
+        const readyVideo = await waitForOwnedVideoReady(video.data.id, publicationIntent, token);
+        setCreatedVideoStatus(readyVideo ? (publicationIntent === "draft" ? "draft-ready" : "published") : "processing");
+      } catch (processingError) {
+        setCreatedVideoStatus("failed");
+        setError(processingError instanceof Error ? processingError.message : "Video processing failed.");
+      }
+
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["my-videos"] });
       if (user?.username) {
@@ -494,6 +526,7 @@ export function UploadVideoForm() {
     pausePreview();
     audioRef.current?.removeAttribute("src");
     setCreatedVideoId(null);
+    setCreatedVideoStatus(null);
     setError("");
     setDuration(0);
     setPreviewTime(0);
@@ -601,7 +634,7 @@ export function UploadVideoForm() {
                 <input type="checkbox" checked={highQuality} onChange={(event) => setHighQuality(event.target.checked)} className="h-4 w-4 accent-violet-600" />
               </label>
               <label className="mt-3 flex items-center justify-between rounded-md bg-zinc-100 px-3 py-3 text-sm font-semibold"><span>Allow others to reuse this content</span><input type="checkbox" checked={reuseContent} onChange={(event) => setReuseContent(event.target.checked)} className="h-4 w-4 accent-violet-600" /></label>
-              <label className="mt-3 flex items-start gap-3 rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-sm"><input type="checkbox" required checked={rightsAccepted} onChange={(event) => setRightsAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span>I own or have permission for the video, audio, music and people shown, including any reuse I enable.</span></label>
+              <label className="mt-3 flex items-start gap-3 rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-sm"><input type="checkbox" required disabled={!policies.data} checked={rightsAccepted} onChange={(event) => setRightsAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span>{policies.data?.data.rights_declaration ?? (policies.isError ? "The current rights declaration is unavailable. Refresh before uploading." : "Loading the current rights declaration…")}</span></label>
             </Panel>
           </div>
 
@@ -673,7 +706,9 @@ export function UploadVideoForm() {
               <ToolLauncher icon={<SlidersHorizontal size={20} />} label="Filters" onClick={() => { pausePreview(); setFilterEditorOpen(true); }} disabled={!previewUrl} />
             </div>
 
-            {createdVideoId && <Status tone="success" text="Your video has been published! It may take a moment to appear." />}
+            {createdVideoId && createdVideoStatus === "published" && <Status tone="success" text="Your video is published and ready to watch." />}
+            {createdVideoId && createdVideoStatus === "draft-ready" && <Status tone="success" text="Your private draft is ready to review in Studio." />}
+            {createdVideoId && createdVideoStatus === "processing" && <Status tone="success" text="Upload accepted. Your video is still processing—check My Posts for its current state before uploading it again." />}
             {error && <Status tone="error" text={error} />}
             {submitting && <Progress step={step} />}
 
@@ -1581,7 +1616,8 @@ function stepLabel(step: Step) {
   if (step === "processing-audio") return "Processing audio";
   if (step === "uploading") return "Uploading video";
   if (step === "publishing") return "Publishing";
-  if (step === "done") return "Published";
+  if (step === "processing-video") return "Processing video";
+  if (step === "done") return "Complete";
   return "Ready";
 }
 
@@ -1590,6 +1626,7 @@ function stepPercent(step: Step) {
   if (step === "processing-audio") return 42;
   if (step === "uploading") return 64;
   if (step === "publishing") return 88;
+  if (step === "processing-video") return 94;
   if (step === "done") return 100;
   return 0;
 }

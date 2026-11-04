@@ -48,7 +48,7 @@ import { getFollowers, getFollowing, getProfile, getUserVideos } from "@/service
 import { openConversation } from "@/services/messaging";
 import { getMyArtist } from "@/services/artists";
 import type { Profile, SingleResponse, UserSummary, Video } from "@/types/api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const demoCover =
   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=85";
@@ -70,7 +70,10 @@ export function ProfileCard({ username }: { username: string }) {
   const [relationPanel, setRelationPanel] = useState<"followers" | "following" | null>(null);
   const [relationUsers, setRelationUsers] = useState<UserSummary[]>([]);
   const [relationLoading, setRelationLoading] = useState(false);
+  const [relationLoadingMore, setRelationLoadingMore] = useState(false);
   const [relationError, setRelationError] = useState<string | null>(null);
+  const [relationPage, setRelationPage] = useState(1);
+  const [relationLastPage, setRelationLastPage] = useState(1);
   const [editingProfile, setEditingProfile] = useState(false);
   const [editDraft, setEditDraft] = useState({ username: "", name: "", avatar: "", bio: "" });
   const [editAvatarPreview, setEditAvatarPreview] = useState("");
@@ -89,10 +92,12 @@ export function ProfileCard({ username }: { username: string }) {
     staleTime: 60 * 1000,
   });
   const profile = profileQuery.data?.data ?? null;
-  const userVideosQuery = useQuery({
+  const userVideosQuery = useInfiniteQuery({
     enabled: !authLoading,
     queryKey: queryKeys.userVideos(username, authScope),
-    queryFn: () => getUserVideos(username, 40, token),
+    queryFn: ({ pageParam }) => getUserVideos(username, 40, token, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     staleTime: 45 * 1000,
   });
   const isOwnProfileFromQuery = Boolean(token && viewer?.id && profile?.id === viewer.id);
@@ -108,21 +113,25 @@ export function ProfileCard({ username }: { username: string }) {
       }
     },
   });
-  const favoriteVideosQuery = useQuery({
+  const favoriteVideosQuery = useInfiniteQuery({
     enabled: isOwnProfileFromQuery,
     queryKey: queryKeys.savedVideos(authScope),
-    queryFn: () => getSavedVideos(token as string, 80),
+    queryFn: ({ pageParam }) => getSavedVideos(token as string, 40, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     staleTime: 30 * 1000,
   });
-  const likedVideosQuery = useQuery({
+  const likedVideosQuery = useInfiniteQuery({
     enabled: isOwnProfileFromQuery,
     queryKey: queryKeys.likedVideos(authScope),
-    queryFn: () => getLikedVideos(token as string, 80),
+    queryFn: ({ pageParam }) => getLikedVideos(token as string, 40, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     staleTime: 30 * 1000,
   });
-  const userVideos = userVideosQuery.data?.data ?? [];
-  const favoriteVideos = favoriteVideosQuery.data?.data ?? [];
-  const likedVideos = likedVideosQuery.data?.data ?? [];
+  const userVideos = userVideosQuery.data?.pages.flatMap((page) => page.data) ?? [];
+  const favoriteVideos = favoriteVideosQuery.data?.pages.flatMap((page) => page.data) ?? [];
+  const likedVideos = likedVideosQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const loading = authLoading || profileQuery.isLoading || userVideosQuery.isLoading;
   const profileLoadError = profileQuery.error;
   const error = profileQuery.isError || userVideosQuery.isError
@@ -180,16 +189,37 @@ export function ProfileCard({ username }: { username: string }) {
     setRelationLoading(true);
     setRelationError(null);
     setRelationUsers([]);
+    setRelationPage(1);
 
     try {
       const response = panel === "followers"
-        ? await getFollowers(profile.username, 50)
-        : await getFollowing(profile.username, 50);
+        ? await getFollowers(profile.username, 50, 1, token)
+        : await getFollowing(profile.username, 50, 1, token);
       setRelationUsers(response.data);
+      setRelationLastPage(response.meta.last_page);
     } catch {
       setRelationError(`Could not load ${panel}.`);
     } finally {
       setRelationLoading(false);
+    }
+  };
+
+  const loadMoreRelations = async () => {
+    if (!profile || !relationPanel || relationLoadingMore || relationPage >= relationLastPage) return;
+    setRelationLoadingMore(true);
+    setRelationError(null);
+    const nextPage = relationPage + 1;
+    try {
+      const response = relationPanel === "followers"
+        ? await getFollowers(profile.username, 50, nextPage, token)
+        : await getFollowing(profile.username, 50, nextPage, token);
+      setRelationUsers((current) => [...new Map([...current, ...response.data].map((person) => [person.id, person])).values()]);
+      setRelationPage(response.meta.current_page);
+      setRelationLastPage(response.meta.last_page);
+    } catch {
+      setRelationError(`Could not load more ${relationPanel}.`);
+    } finally {
+      setRelationLoadingMore(false);
     }
   };
 
@@ -323,6 +353,7 @@ export function ProfileCard({ username }: { username: string }) {
     : activeTab === "favorites"
       ? favoriteVideos
       : likedVideos;
+  const activeVideoQuery = activeTab === "videos" ? userVideosQuery : activeTab === "favorites" ? favoriteVideosQuery : likedVideosQuery;
   const sortedVideos = sortProfileVideos(tabVideos, sortMode);
   const privateTabLocked = activeTab !== "videos" && !isOwnProfile;
   const profileContentHidden = blockedByViewer || privateTabLocked;
@@ -596,6 +627,7 @@ export function ProfileCard({ username }: { username: string }) {
             </div>
           )}
         </div>
+        {!profileContentHidden && activeVideoQuery.hasNextPage && <div className="mt-5 text-center"><button type="button" disabled={activeVideoQuery.isFetchingNextPage} onClick={() => void activeVideoQuery.fetchNextPage()} className="h-10 rounded-lg border border-[var(--line)] px-5 text-sm font-bold disabled:opacity-50">{activeVideoQuery.isFetchingNextPage ? "Loading…" : "Load more"}</button></div>}
       </div>
       <Dialog open={editingProfile} onOpenChange={setEditingProfile}>
         <DialogContent className="flex h-[min(92vh,760px)] flex-col p-0">
@@ -807,6 +839,8 @@ export function ProfileCard({ username }: { username: string }) {
                   </div>
                 </Link>
               ))}
+
+              {!relationLoading && relationPage < relationLastPage && <button type="button" disabled={relationLoadingMore} onClick={() => void loadMoreRelations()} className="h-10 w-full rounded-lg border border-[var(--line)] text-sm font-bold disabled:opacity-50">{relationLoadingMore ? "Loading…" : "Load more"}</button>}
 
               {!relationLoading && !relationError && !relationUsers.length && (
                 <p className={cx("pt-10 text-center text-sm font-semibold", isDark ? "text-violet-100/45" : "text-zinc-400")}>

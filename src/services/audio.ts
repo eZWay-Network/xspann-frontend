@@ -1,4 +1,4 @@
-import type { AudioTrack, PaginatedResponse, SingleResponse } from "@/types/api";
+import type { AudioTrack, PaginatedResponse, SingleResponse, Video } from "@/types/api";
 import { apiRequest } from "./api";
 
 export function getAudios(query = "", page = 1, token?: string | null) {
@@ -10,7 +10,10 @@ export function getSavedAudios(token: string, page = 1) {
   return apiRequest<PaginatedResponse<AudioTrack>>(`/me/saved-audios?page=${page}&limit=20`, { token });
 }
 export const getAudio = (id: number, token?: string | null) => apiRequest<SingleResponse<AudioTrack>>(`/audios/${id}`, { token });
+export const getAudioVideos = (id: number, page = 1, token?: string | null) => apiRequest<PaginatedResponse<Video>>(`/audios/${id}/videos?page=${page}&limit=24`, { token });
 export const createAudio = (payload: { storage_path: string; title: string; reuse_allowed: boolean; rights_confirmed: true; rights_version: string }, token: string) => apiRequest<SingleResponse<AudioTrack>>("/audios", { method: "POST", token, body: JSON.stringify(payload) });
+export const updateAudio = (id: number, payload: { title?: string; reuse_allowed?: boolean }, token: string) => apiRequest<SingleResponse<AudioTrack>>(`/audios/${id}`, { method: "PATCH", token, body: JSON.stringify(payload) });
+export const deleteAudio = (id: number, token: string) => apiRequest<SingleResponse<{ message: string }>>(`/audios/${id}`, { method: "DELETE", token });
 export const saveAudio = (id: number, token: string) => apiRequest<SingleResponse<{ saved: true; created: boolean }>>(`/audios/${id}/save`, { method: "POST", token });
 export const unsaveAudio = (id: number, token: string) => apiRequest<SingleResponse<{ saved: false }>>(`/audios/${id}/save`, { method: "DELETE", token });
 

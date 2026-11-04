@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Heart, LoaderCircle, Send, SmilePlus, Trash2, X } from "lucide-react";
+import { type InfiniteData, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowUp, Flag, Heart, LoaderCircle, Send, SmilePlus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
@@ -27,6 +27,7 @@ import {
   removeCommentReaction,
   setCommentReaction,
 } from "@/services/comments";
+import { reportTarget } from "@/services/safety";
 import type { Comment, PaginatedResponse, Video } from "@/types/api";
 
 const commentEmojis = [
@@ -38,6 +39,7 @@ const commentEmojis = [
 ];
 
 type ReplyTarget = { parentId: number; username: string };
+type CommentPages = InfiniteData<PaginatedResponse<Comment>, number>;
 
 export function CommentsPanel({
   video,
@@ -62,15 +64,21 @@ export function CommentsPanel({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyEmojiOpen, setReplyEmojiOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Comment | null>(null);
+  const [reportComment, setReportComment] = useState<Comment | null>(null);
+  const [reportReason, setReportReason] = useState("other");
+  const [reportDetails, setReportDetails] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const commentsQuery = useQuery({
+  const commentsQuery = useInfiniteQuery({
     enabled: open,
     queryKey: commentsQueryKey,
-    queryFn: () => getComments(video.id, 100, token),
+    queryFn: ({ pageParam }) => getComments(video.id, 50, token, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     staleTime: 15_000,
   });
-  const comments = commentsQuery.data?.data ?? [];
+  const comments = commentsQuery.data?.pages.flatMap((page) => page.data) ?? [];
 
   const createCommentMutation = useMutation({
     mutationFn: (nextBody: string) => {
@@ -78,12 +86,7 @@ export function CommentsPanel({
       return createComment(video.id, nextBody, token);
     },
     onSuccess: (response) => {
-      queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => ({
-        data: [response.data, ...(current?.data ?? [])],
-        meta: current?.meta
-          ? { ...current.meta, total: current.meta.total + 1 }
-          : { current_page: 1, last_page: 1, per_page: 100, total: 1 },
-      }));
+      queryClient.setQueryData<CommentPages>(commentsQueryKey, (current) => prependCommentPage(current, response.data));
       onCommentCountChange?.(video.id, 1);
       setBody("");
       setEmojiOpen(false);
@@ -97,18 +100,8 @@ export function CommentsPanel({
       return createComment(video.id, nextBody, token, parentId);
     },
     onSuccess: (response, { parentId }) => {
-      queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => current && ({
-        ...current,
-        data: current.data.map((comment) => comment.id === parentId
-          ? { ...comment, replies_count: (comment.replies_count ?? 0) + 1 }
-          : comment),
-      }));
-      queryClient.setQueryData<PaginatedResponse<Comment>>(queryKeys.commentReplies(parentId, user?.id), (current) => ({
-        data: [response.data, ...(current?.data ?? [])],
-        meta: current?.meta
-          ? { ...current.meta, total: current.meta.total + 1 }
-          : { current_page: 1, last_page: 1, per_page: 100, total: 1 },
-      }));
+      queryClient.setQueryData<CommentPages>(commentsQueryKey, (current) => mapCommentPages(current, (comment) => comment.id === parentId ? { ...comment, replies_count: (comment.replies_count ?? 0) + 1 } : comment));
+      queryClient.setQueryData<CommentPages>(queryKeys.commentReplies(parentId, user?.id), (current) => prependCommentPage(current, response.data));
       void queryClient.invalidateQueries({ queryKey: queryKeys.commentReplies(parentId, user?.id) });
       setOpenReplies((current) => ({ ...current, [parentId]: true }));
       onCommentCountChange?.(video.id, 1);
@@ -130,10 +123,7 @@ export function CommentsPanel({
       const key = comment.parent_id
         ? queryKeys.commentReplies(comment.parent_id, user?.id)
         : commentsQueryKey;
-      queryClient.setQueryData<PaginatedResponse<Comment>>(key, (current) => current && ({
-        ...current,
-        data: current.data.map((item) => item.id === response.data.id ? response.data : item),
-      }));
+      queryClient.setQueryData<CommentPages>(key, (current) => mapCommentPages(current, (item) => item.id === response.data.id ? response.data : item));
     },
     onError: (caught) => setError(errorMessage(caught, "Could not update reaction.")),
   });
@@ -145,23 +135,10 @@ export function CommentsPanel({
     },
     onSuccess: (_response, comment) => {
       if (comment.parent_id) {
-        queryClient.setQueryData<PaginatedResponse<Comment>>(queryKeys.commentReplies(comment.parent_id, user?.id), (current) => current && ({
-          ...current,
-          data: current.data.filter((item) => item.id !== comment.id),
-          meta: { ...current.meta, total: Math.max(0, current.meta.total - 1) },
-        }));
-        queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => current && ({
-          ...current,
-          data: current.data.map((item) => item.id === comment.parent_id
-            ? { ...item, replies_count: Math.max(0, (item.replies_count ?? 0) - 1) }
-            : item),
-        }));
+        queryClient.setQueryData<CommentPages>(queryKeys.commentReplies(comment.parent_id, user?.id), (current) => removeCommentPage(current, comment.id));
+        queryClient.setQueryData<CommentPages>(commentsQueryKey, (current) => mapCommentPages(current, (item) => item.id === comment.parent_id ? { ...item, replies_count: Math.max(0, (item.replies_count ?? 0) - 1) } : item));
       } else {
-        queryClient.setQueryData<PaginatedResponse<Comment>>(commentsQueryKey, (current) => current && ({
-          ...current,
-          data: current.data.filter((item) => item.id !== comment.id),
-          meta: { ...current.meta, total: Math.max(0, current.meta.total - 1) },
-        }));
+        queryClient.setQueryData<CommentPages>(commentsQueryKey, (current) => removeCommentPage(current, comment.id));
       }
       onCommentCountChange?.(video.id, -1);
       setDeleteTarget(null);
@@ -198,6 +175,20 @@ export function CommentsPanel({
     reactionMutation.mutate(comment);
   }
 
+  async function submitCommentReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reportComment || !token) return;
+    setError("");
+    try {
+      const response = await reportTarget({ comment_id: reportComment.id }, { reason: reportReason, details: reportDetails }, token);
+      setNotice(`Report #${response.data.id} submitted for review.`);
+      setReportComment(null);
+      setReportDetails("");
+    } catch (caught) {
+      setError(errorMessage(caught, "Could not report this comment."));
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -219,6 +210,7 @@ export function CommentsPanel({
               onReact={reactTo}
               onReply={() => startReply(comment.id, comment.user.username)}
               onDelete={() => setDeleteTarget(comment)}
+              onReport={() => setReportComment(comment)}
             />
             {replyTarget?.parentId === comment.id && (
               <ReplyComposer
@@ -247,14 +239,17 @@ export function CommentsPanel({
                 onReact={reactTo}
                 onReply={(reply) => startReply(comment.id, reply.user.username, true)}
                 onDelete={setDeleteTarget}
+                onReport={setReportComment}
               />
             )}
           </div>
         ))}
         {!commentsQuery.isLoading && !comments.length && !commentsQuery.isError && <p className="py-10 text-center text-sm text-[var(--muted)]">No comments yet.</p>}
+        {commentsQuery.hasNextPage && <button type="button" disabled={commentsQuery.isFetchingNextPage} onClick={() => void commentsQuery.fetchNextPage()} className="h-10 w-full rounded-lg border border-[var(--line)] text-sm font-bold disabled:opacity-50">{commentsQuery.isFetchingNextPage ? "Loading…" : "Load more comments"}</button>}
       </div>
 
       {(error || commentsQuery.isError) && <p role="alert" className={cx("mt-3 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm", isDark ? "text-rose-300" : "text-rose-600")}>{error || "Could not load comments."}</p>}
+      {notice && <p role="status" className="mt-3 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">{notice}</p>}
       {emojiOpen && <EmojiPicker isDark={isDark} onChoose={(emoji) => { setBody((current) => `${current}${emoji}`); setEmojiOpen(false); }} />}
       <form onSubmit={submitComment} className="mt-3 flex shrink-0 items-center gap-2">
         <UserAvatar src={user?.avatar} size={36} className="h-9 w-9" />
@@ -281,11 +276,21 @@ export function CommentsPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={Boolean(reportComment)} onOpenChange={(nextOpen) => !nextOpen && setReportComment(null)}>
+        <DialogContent className="max-w-sm p-0" showCloseButton={false}>
+          <form onSubmit={submitCommentReport}>
+            <DialogHeader className="px-5 pt-5"><DialogTitle>Report comment</DialogTitle><DialogDescription>Choose the reason that best describes the problem.</DialogDescription></DialogHeader>
+            <div className="grid gap-3 px-5 py-4"><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="studio-input">{["harassment", "hate", "violence", "spam", "copyright", "other"].map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} rows={3} placeholder="Optional details" className="studio-input h-auto py-3" /></div>
+            <DialogFooter className="border-t border-[var(--line)] px-5 py-4"><button type="button" onClick={() => setReportComment(null)} className="h-10 rounded-md border border-[var(--line)] px-4 text-sm font-bold">Cancel</button><button className="h-10 rounded-md bg-[var(--royal)] px-4 text-sm font-bold text-white">Submit report</button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }
 
-function CommentRow({ comment, isReply = false, authenticated, currentUserId, reactionPendingId, onReact, onReply, onDelete }: {
+function CommentRow({ comment, isReply = false, authenticated, currentUserId, reactionPendingId, onReact, onReply, onDelete, onReport }: {
   comment: Comment;
   isReply?: boolean;
   authenticated: boolean;
@@ -294,6 +299,7 @@ function CommentRow({ comment, isReply = false, authenticated, currentUserId, re
   onReact: (comment: Comment) => void;
   onReply: () => void;
   onDelete: () => void;
+  onReport: () => void;
 }) {
   const reactionCount = comment.reactions?.love ?? 0;
   const selected = comment.viewer_reaction === "love";
@@ -312,6 +318,7 @@ function CommentRow({ comment, isReply = false, authenticated, currentUserId, re
           <time dateTime={comment.created_at}>{shortRelativeTime(comment.created_at)}</time>
           <button type="button" onClick={onReply} disabled={!authenticated} className="font-semibold hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50">Reply</button>
           {currentUserId === comment.user.id && <button type="button" onClick={onDelete} className="hover:text-rose-500" aria-label="Delete comment"><Trash2 size={13} /></button>}
+          {currentUserId !== comment.user.id && <button type="button" onClick={onReport} disabled={!authenticated} className="hover:text-rose-500 disabled:opacity-40" aria-label="Report comment"><Flag size={13} /></button>}
           <span className="flex-1" />
           <button type="button" onClick={() => onReact(comment)} disabled={!authenticated || busy} className={cx("inline-flex items-center gap-1 hover:text-rose-500 disabled:cursor-not-allowed", selected && "text-rose-500")} aria-label={isReply ? (selected ? "Remove love from reply" : "Love reply") : (selected ? "Remove love from comment" : "Love comment")} aria-pressed={selected}>
             {updatingThis ? <LoaderCircle size={15} className="animate-spin" /> : <Heart size={16} fill={selected ? "currentColor" : "none"} />}
@@ -323,7 +330,7 @@ function CommentRow({ comment, isReply = false, authenticated, currentUserId, re
   );
 }
 
-function ReplyThread({ parentId, authenticated, currentUserId, reactionPendingId, onReact, onReply, onDelete }: {
+function ReplyThread({ parentId, authenticated, currentUserId, reactionPendingId, onReact, onReply, onDelete, onReport }: {
   parentId: number;
   authenticated: boolean;
   currentUserId?: number;
@@ -331,18 +338,21 @@ function ReplyThread({ parentId, authenticated, currentUserId, reactionPendingId
   onReact: (comment: Comment) => void;
   onReply: (comment: Comment) => void;
   onDelete: (comment: Comment) => void;
+  onReport: (comment: Comment) => void;
 }) {
   const { token, user } = useAuth();
-  const repliesQuery = useQuery({
+  const repliesQuery = useInfiniteQuery({
     queryKey: queryKeys.commentReplies(parentId, user?.id),
-    queryFn: () => getCommentReplies(parentId, 100, token),
+    queryFn: ({ pageParam }) => getCommentReplies(parentId, 50, token, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     staleTime: 15_000,
   });
   return (
     <div className="ml-10 border-l border-[var(--line)] pl-3">
       {repliesQuery.isLoading && <div className="py-3"><XpnLoader compact label="Loading replies..." /></div>}
       {repliesQuery.isError && <p className="py-3 text-xs text-rose-500">Could not load replies.</p>}
-      {repliesQuery.data?.data.map((reply) => (
+      {repliesQuery.data?.pages.flatMap((page) => page.data).map((reply) => (
         <CommentRow
           key={reply.id}
           comment={reply}
@@ -353,10 +363,35 @@ function ReplyThread({ parentId, authenticated, currentUserId, reactionPendingId
           onReact={onReact}
           onReply={() => onReply(reply)}
           onDelete={() => onDelete(reply)}
+          onReport={() => onReport(reply)}
         />
       ))}
+      {repliesQuery.hasNextPage && <button type="button" disabled={repliesQuery.isFetchingNextPage} onClick={() => void repliesQuery.fetchNextPage()} className="mb-2 h-9 w-full rounded-lg border border-[var(--line)] text-xs font-bold disabled:opacity-50">{repliesQuery.isFetchingNextPage ? "Loading…" : "Load more replies"}</button>}
     </div>
   );
+}
+
+function mapCommentPages(current: CommentPages | undefined, mapper: (comment: Comment) => Comment): CommentPages | undefined {
+  if (!current) return current;
+  return { ...current, pages: current.pages.map((page) => ({ ...page, data: page.data.map(mapper) })) };
+}
+
+function prependCommentPage(current: CommentPages | undefined, comment: Comment): CommentPages {
+  if (!current) {
+    return { pages: [{ data: [comment], meta: { current_page: 1, last_page: 1, per_page: 50, total: 1 } }], pageParams: [1] };
+  }
+  return {
+    ...current,
+    pages: current.pages.map((page, index) => index === 0 ? { ...page, data: [comment, ...page.data], meta: { ...page.meta, total: page.meta.total + 1 } } : { ...page, meta: { ...page.meta, total: page.meta.total + 1 } }),
+  };
+}
+
+function removeCommentPage(current: CommentPages | undefined, commentId: number): CommentPages | undefined {
+  if (!current) return current;
+  return {
+    ...current,
+    pages: current.pages.map((page) => ({ ...page, data: page.data.filter((comment) => comment.id !== commentId), meta: { ...page.meta, total: Math.max(0, page.meta.total - 1) } })),
+  };
 }
 
 function ReplyComposer({ value, username, isDark, emojiOpen, pending, onChange, onEmojiToggle, onCancel, onSubmit }: {

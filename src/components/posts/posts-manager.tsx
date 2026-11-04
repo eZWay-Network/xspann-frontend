@@ -551,68 +551,38 @@ function EditPanel({ title, children }: { title: string; children: ReactNode }) 
 
 function PostPreview({ post, caption }: { post: Video; caption: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [previewTime, setPreviewTime] = useState(post.edit.trim_start ?? 0);
+  const [previewTime, setPreviewTime] = useState(0);
   const cropMode = post.edit.crop_mode ?? "fill";
   const duration = displayDuration(post);
-  const trimStart = post.edit.trim_start ?? 0;
-  const trimEnd = Math.max(trimStart + 0.1, post.edit.trim_end ?? post.duration ?? duration);
-  const timelineMax = Math.max(trimEnd, trimStart + 0.1);
-  // Server rendering produces the final soundtrack in the video asset.
-  const hasExternalSound = false;
-  const videoMuted = hasExternalSound || post.edit.original_audio_muted;
-
-  function syncAudioToVideo() {
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
-
-    const audioDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
-
-    try {
-      audio.currentTime = audioDuration ? video.currentTime % audioDuration : video.currentTime;
-    } catch {
-      // Audio metadata may not be ready during the first preview click.
-    }
-  }
+  const timelineMax = Math.max(post.duration ?? duration, 0.1);
 
   function seekPreview(value: number) {
-    const nextValue = Math.min(trimEnd, Math.max(trimStart, value));
+    const nextValue = Math.min(timelineMax, Math.max(0, value));
     setPreviewTime(nextValue);
 
     if (videoRef.current) {
       videoRef.current.currentTime = nextValue;
     }
-
-    syncAudioToVideo();
   }
 
   async function playPreview() {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
 
-    if (video.currentTime < trimStart || video.currentTime >= trimEnd) {
-      video.currentTime = trimStart;
-      setPreviewTime(trimStart);
+    if (video.currentTime >= timelineMax) {
+      video.currentTime = 0;
+      setPreviewTime(0);
     }
 
-    video.muted = videoMuted;
+    video.muted = false;
     await video.play().catch(() => undefined);
-
-    if (audio && hasExternalSound) {
-      audio.muted = false;
-      syncAudioToVideo();
-      await audio.play().catch(() => undefined);
-    }
 
     setPlaying(true);
   }
 
   function pausePreview() {
     videoRef.current?.pause();
-    audioRef.current?.pause();
     setPlaying(false);
   }
 
@@ -626,16 +596,12 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
   }
 
   function handleTimeUpdate() {
-    const currentTime = videoRef.current?.currentTime ?? trimStart;
+    const currentTime = videoRef.current?.currentTime ?? 0;
 
-    if (currentTime >= trimEnd) {
+    if (currentTime >= timelineMax) {
       pausePreview();
-      seekPreview(trimStart);
+      seekPreview(0);
       return;
-    }
-
-    if (hasExternalSound && audioRef.current && Math.abs(audioRef.current.currentTime - currentTime) > 0.45) {
-      syncAudioToVideo();
     }
 
     setPreviewTime(currentTime);
@@ -650,10 +616,10 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
               ref={videoRef}
               src={post.video_url}
               className={`h-full w-full ${cropMode === "fill" ? "object-cover" : "object-contain"}`}
-              muted={videoMuted}
+              muted={false}
               playsInline
               preload="metadata"
-              onLoadedMetadata={() => seekPreview(trimStart)}
+              onLoadedMetadata={() => seekPreview(0)}
               onTimeUpdate={handleTimeUpdate}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
@@ -666,7 +632,6 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
             <Filter size={28} />
           </div>
         )}
-        {hasExternalSound && <audio ref={audioRef} src={post.sound_preview_url ?? undefined} loop preload="metadata" />}
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.18),transparent_36%,rgba(0,0,0,0.74))]" />
         <div className="absolute left-4 right-4 top-4 flex items-center justify-between text-[11px] font-bold drop-shadow">
           <span>8:00</span>
@@ -703,8 +668,8 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
               {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
             </button>
           )}
-          <input type="range" min={trimStart} max={timelineMax} step={0.1} value={Math.min(previewTime, timelineMax)} onChange={(event) => seekPreview(Number(event.target.value))} className="min-w-0 flex-1 accent-white" />
-          <span className="whitespace-nowrap text-[10px] font-bold">{formatDuration(Math.max(0, previewTime - trimStart))}</span>
+          <input type="range" min={0} max={timelineMax} step={0.1} value={Math.min(previewTime, timelineMax)} onChange={(event) => seekPreview(Number(event.target.value))} className="min-w-0 flex-1 accent-white" />
+          <span className="whitespace-nowrap text-[10px] font-bold">{formatDuration(Math.max(0, previewTime))}</span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 grid grid-cols-5 bg-black/75 py-2 text-center text-[9px] font-bold">
           <span>Home</span><span>Friends</span><span className="mx-auto rounded bg-white px-3 text-black">+</span><span>Inbox</span><span>Me</span>
@@ -715,10 +680,7 @@ function PostPreview({ post, caption }: { post: Video; caption: string }) {
 }
 
 function displayDuration(post: Video): number {
-  const start = post.edit.trim_start ?? 0;
-  const end = post.edit.trim_end ?? post.duration ?? 0;
-
-  return Math.max(0, end - start);
+  return Math.max(0, post.duration ?? 0);
 }
 
 function ForwardShareIcon() {
