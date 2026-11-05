@@ -294,11 +294,27 @@ export type PromotionPlacement = {
   video: Video; expires_at: string; event_token: string;
 };
 export type BoostBalance = { available_cents: number; reserved_cents: number; used_cents: number; held_cents: number; currency: string; spending_held: boolean };
+export type BoostLedgerEntry = {
+  id: number; boost_id: number | null; kind: string; available_delta_cents: number;
+  reserved_delta_cents: number; used_delta_cents: number; currency: string; created_at: string;
+};
 export type Boost = {
   id: number; artist_id: number; video_id: number; offer_id: string; surface: string; status: string; version: number;
-  price_cents: number; currency: string; duration_seconds: number; starts_at: string; ends_at: string; stop_reason: string | null;
-  report: { reserved_cents: number; charged_cents: number; returned_cents: number; delivered_seconds: number; undelivered_seconds: number; render_events: number; click_events: number };
+  price_cents: number; currency: string; duration_seconds: number; starts_at: string; ends_at: string; activated_at?: string | null;
+  rights_version?: string; rights_confirmed_at?: string | null; staff_hold?: boolean; stop_reason: string | null;
+  settle_after?: string | null; settled_at?: string | null;
+  report: { reserved_cents: number; charged_cents: number; returned_cents: number; delivered_seconds: number; undelivered_seconds: number; render_events: number; click_events: number; telemetry_is_billable?: false };
   created_at: string;
+};
+export type ArtistPlacement = {
+  id: number; artist_id: number; boost_id: number | null; type: "feature" | "network_post" | "boost" | string;
+  month: string; destination: string; status: string; version: number; starts_at: string | null; ends_at: string | null;
+  due_at: string | null; reason: string | null;
+  extension: { starts_at: string | null; ends_at: string | null; consent: boolean | null; consented_at: string | null } | null;
+  evidence: { url?: string; label?: string; completed_at?: string } | string | null; created_at: string;
+};
+export type FeaturedArtistPlacement = {
+  id: number; artist: { id: number; name: string; slug: string }; disclosure: string; starts_at: string; ends_at: string;
 };
 
 export type Notification = {

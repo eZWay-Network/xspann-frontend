@@ -47,6 +47,10 @@ export function RealtimeBridge() {
       if (event === "boost.updated" || event === "placement.updated") {
         void client.invalidateQueries({ queryKey: ["boosts", user.id] });
         void client.invalidateQueries({ queryKey: ["boost-balance", user.id] });
+        void client.invalidateQueries({ queryKey: ["boost-ledger", user.id] });
+        void client.invalidateQueries({ queryKey: ["artist-placements", user.id] });
+        void client.invalidateQueries({ queryKey: ["promoted-placements"] });
+        void client.invalidateQueries({ queryKey: ["featured-artists"] });
       }
     };
 
