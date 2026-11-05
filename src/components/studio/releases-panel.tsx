@@ -13,9 +13,9 @@ import { cancelReleaseSchedule, getRelease, getReleases, publishRelease, retryRe
 import { deleteVideo } from "@/services/videos";
 import type { Release } from "@/types/api";
 
-export function ReleasesPanel({ token, userId, username, canSchedule }: { token: string; userId: number; username?: string; canSchedule: boolean }) {
+export function ReleasesPanel({ token, userId, username, canSchedule, initialSelectedId }: { token: string; userId: number; username?: string; canSchedule: boolean; initialSelectedId?: number }) {
   const client = useQueryClient();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(initialSelectedId ?? null);
   const releases = useInfiniteQuery({
     queryKey: ["releases", userId],
     queryFn: ({ pageParam }) => getReleases(token, pageParam),

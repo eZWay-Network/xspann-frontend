@@ -26,6 +26,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BottomNav } from "@/components/common/bottom-nav";
 import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
+import { InboxUnreadDot } from "@/components/messaging/inbox-unread-dot";
 import { Logo } from "@/components/common/logo";
 import { Sidebar } from "@/components/common/sidebar";
 import { useAuth } from "@/components/common/auth-provider";
@@ -247,6 +248,7 @@ function MobileMenuLink({
         <Icon size={22} strokeWidth={active ? 2.3 : 1.8} fill="none" />
         <span>{label}</span>
         {label === "Activity" && <ActivityUnreadDot />}
+        {label === "Inbox" && <InboxUnreadDot />}
       </Link>
     </SheetClose>
   );

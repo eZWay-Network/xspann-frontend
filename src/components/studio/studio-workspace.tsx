@@ -2,16 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, CalendarClock, CheckCircle2, CircleDollarSign, ExternalLink, GripVertical, ListMusic, LoaderCircle, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
+import { AnnouncementsPanel } from "@/components/studio/announcements-panel";
 import { ReleasesPanel } from "@/components/studio/releases-panel";
 import { ApiError } from "@/services/api";
 import { createPlaylist, deletePlaylist, getArtistAnalytics, getArtistTaxonomy, getFanSummary, getMyArtist, getMyPlaylist, getMyPlaylists, replacePlaylistItems, saveArtistLinks, saveMyArtist, updatePlaylist, uploadArtistImage } from "@/services/artists";
 import { getEntitlements } from "@/services/billing";
-import { createAnnouncement, getOwnerAnnouncements, sendAnnouncement } from "@/services/messaging";
 import { createBoost, getBoostBalance, getBoosts, getPromotionOffers, submitBoost } from "@/services/promotions";
 import { getReleases } from "@/services/releases";
 import { getMyVideos } from "@/services/videos";
@@ -27,7 +28,9 @@ const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<{ size?: n
 
 export function StudioWorkspace() {
   const { token, user } = useAuth();
-  const [tab, setTab] = useState<Tab>("overview");
+  const search = useSearchParams();
+  const initialReleaseId = Number(search.get("release"));
+  const [tab, setTab] = useState<Tab>(() => initialReleaseId > 0 ? "releases" : "overview");
   const [createdArtist, setCreatedArtist] = useState<Artist | null>(null);
   const artistQuery = useQuery({ queryKey: ["my-artist", user?.id], enabled: Boolean(token), queryFn: async () => { try { return (await getMyArtist(token!)).data; } catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; } } });
   const entitlements = useQuery({ queryKey: ["entitlements", user?.id], enabled: Boolean(token), queryFn: () => getEntitlements(token!), refetchOnWindowFocus: true });
@@ -52,7 +55,7 @@ export function StudioWorkspace() {
   return <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"><div className="mx-auto max-w-7xl">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-[var(--royal)]">Artist workspace</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Welcome back, {artist.stage_name}</h1><p className="mt-2 text-sm text-[var(--muted)]">Manage your identity, releases and fan relationships in one place.</p></div><div className="flex items-center gap-3"><span className="rounded-full bg-violet-500/10 px-3 py-1.5 text-xs font-bold uppercase text-[var(--royal)]">{entitlements.data?.data.effective_plan ?? artist.capabilities?.plan ?? "free"}</span><Link href={`/artists/${artist.slug}`} className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--royal)]">View public page <ExternalLink size={15} /></Link></div></div>
     <div className="mt-7 flex gap-2 overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-2 no-scrollbar">{tabs.map((item) => <button key={item.id} onClick={() => setTab(item.id)} className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition ${tab === item.id ? "bg-violet-600 text-white" : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"}`}><item.icon size={16} />{item.label}</button>)}</div>
-    <div className="mt-6">{tab === "overview" && <Overview artist={artist} token={token!} />}{tab === "profile" && <ProfileEditor artist={artist} token={token!} userId={user!.id} capabilities={capabilities} />}{tab === "releases" && <ReleasesPanel token={token!} userId={user!.id} username={user?.username} canSchedule={capabilities.release_scheduling} />}{tab === "playlists" && <PlaylistsPanel token={token!} userId={user!.id} limit={capabilities.playlists} reportedUsage={playlistUsage} />}{tab === "announcements" && <AnnouncementsPanel token={token!} userId={user!.id} enabled={capabilities.fan_announcements > 0} />}{tab === "promotions" && <PromotionsPanel token={token!} userId={user!.id} />}</div>
+    <div className="mt-6">{tab === "overview" && <Overview artist={artist} token={token!} />}{tab === "profile" && <ProfileEditor artist={artist} token={token!} userId={user!.id} capabilities={capabilities} />}{tab === "releases" && <ReleasesPanel token={token!} userId={user!.id} username={user?.username} canSchedule={capabilities.release_scheduling} initialSelectedId={initialReleaseId > 0 ? initialReleaseId : undefined} />}{tab === "playlists" && <PlaylistsPanel token={token!} userId={user!.id} limit={capabilities.playlists} reportedUsage={playlistUsage} />}{tab === "announcements" && <AnnouncementsPanel token={token!} userId={user!.id} enabled={capabilities.fan_announcements > 0} />}{tab === "promotions" && <PromotionsPanel token={token!} userId={user!.id} />}</div>
   </div></section>;
 }
 
@@ -420,13 +423,6 @@ function PlaylistVideoPicker({ videos, videoIds, disabled, onAdd, onRemove, onRe
 
 function PlaylistVideoThumbnail({ video, order }: { video?: Video; order?: number }) {
   return <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-900">{video?.thumbnail_url ? <Image src={video.thumbnail_url} alt="" fill sizes="64px" className="object-cover" /> : <span className="absolute inset-0 grid place-items-center bg-[linear-gradient(145deg,#27272a,#18181b)] text-zinc-500"><Music2 size={20} /></span>}{order && <span className="absolute left-1.5 top-1.5 grid h-6 min-w-6 place-items-center rounded-md bg-black/75 px-1 text-[10px] font-black text-white">{order}</span>}</span>;
-}
-
-function AnnouncementsPanel({ token, userId, enabled }: { token: string; userId: number; enabled: boolean }) {
-  const client = useQueryClient(); const query = useQuery({ queryKey: ["owner-announcements", userId], queryFn: () => getOwnerAnnouncements(token) }); const [draft, setDraft] = useState({ title: "", body: "" }); const [error, setError] = useState("");
-  const create = useMutation({ mutationFn: () => createAnnouncement(draft, token), onSuccess: () => { setDraft({ title: "", body: "" }); void client.invalidateQueries({ queryKey: ["owner-announcements", userId] }); }, onError: (caught) => setError(caught instanceof ApiError ? caught.message : "Could not save the announcement.") });
-  async function send(id: number, version: number) { setError(""); try { await sendAnnouncement(id, version, crypto.randomUUID(), token); await client.invalidateQueries({ queryKey: ["owner-announcements", userId] }); } catch (caught) { setError(caught instanceof ApiError ? caught.message : "Could not queue the announcement."); } }
-  return <Panel title="Fan updates" helper="Plain-text announcements are delivered only to fans who separately opted in.">{!enabled && <div className="mb-5 rounded-xl bg-amber-500/10 p-4 text-sm text-amber-300">Fan announcements require Artist Pro. Existing history remains visible.</div>}<form onSubmit={(event) => { event.preventDefault(); create.mutate(); }} className="mb-6 grid gap-3 rounded-xl bg-[var(--surface)] p-4"><input disabled={!enabled} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} maxLength={120} placeholder="Update title" className="studio-input" required /><textarea disabled={!enabled} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} maxLength={2000} rows={4} placeholder="Share an update with subscribers…" className="studio-input h-auto py-3" required /><button disabled={!enabled || create.isPending} className="primary-button w-fit">Save draft</button></form>{error && <InlineError message={error} />}<div className="space-y-3">{query.data?.data.map((item) => <div key={item.id} className="rounded-xl border border-[var(--line)] p-4"><div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">{item.title}</h3><p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">{item.body}</p><p className="mt-2 text-xs text-[var(--muted)]">{item.status} · {item.delivered_count ?? 0} delivered · {item.suppressed_count ?? 0} suppressed</p></div>{item.status === "draft" && enabled && <SmallButton onClick={() => void send(item.id, item.version)}>Send</SmallButton>}</div></div>)}</div></Panel>;
 }
 
 function PromotionsPanel({ token, userId }: { token: string; userId: number }) {

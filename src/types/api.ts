@@ -255,7 +255,7 @@ export type Release = Video & {
 
 export type ConversationMessage = {
   id: number; conversation_id: number; sender_user_id: number; client_message_id: string;
-  body: string; unavailable: boolean; created_at: string;
+  body: string | null; unavailable: boolean; created_at: string;
 };
 export type Conversation = {
   id: number; recipient_user_id: number; version: number; can_send: boolean; last_read_message_id: number;
@@ -269,10 +269,20 @@ export type CommunicationPreferences = {
   mute_new_conversations: boolean;
   updates_revision: number;
 };
+export type ArtistUpdateSubscription = {
+  subscribed: boolean;
+  consent_version: string | null;
+  current_consent_version: string;
+  revision: number;
+  channel: "in_app";
+  artist_updates_enabled: boolean;
+  wording?: string | null;
+};
 export type Announcement = {
   id: number; artist_id: number; title: string; body: string; video_id: number | null; version: number;
   status?: string; moderation_status?: string; recipient_count?: number; recipient_estimate?: number;
-  delivered_count?: number; suppressed_count?: number; read_at?: string | null; delivered_at?: string; created_at: string;
+  delivered_count?: number; suppressed_count?: number; read_at?: string | null; delivered_at?: string;
+  accepted_at?: string | null; created_at: string;
 };
 
 export type PromotionOffer = {

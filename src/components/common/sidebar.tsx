@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 import { ActivityUnreadDot } from "@/components/activity/activity-unread-dot";
+import { InboxUnreadDot } from "@/components/messaging/inbox-unread-dot";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import {
@@ -146,6 +147,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               )}
               {item.label === "Activity" && <span className={collapsed ? "absolute right-2 top-1" : undefined}><ActivityUnreadDot /></span>}
+              {item.label === "Inbox" && <span className={collapsed ? "absolute right-2 top-1" : undefined}><InboxUnreadDot /></span>}
             </Link>
           );
         })}

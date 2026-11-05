@@ -83,7 +83,7 @@ export function notificationDetails(notification: Notification) {
   const href = /direct.?message|message\.created/.test(type) && conversationId
     ? `/inbox/${conversationId}`
     : /artist.?announcement/.test(type) && announcementId
-      ? `/activity?announcement=${announcementId}`
+      ? `/announcements/${announcementId}`
       : /release.?paused/.test(type) && releaseId
         ? `/studio?release=${releaseId}`
         : videoId ? `/video/${videoId}` : username ? `/profile/${encodeURIComponent(username)}` : null;
