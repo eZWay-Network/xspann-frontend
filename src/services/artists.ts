@@ -1,4 +1,4 @@
-import type { Artist, ArtistLink, ArtistPlaylist, ArtistTaxonomy, PaginatedResponse, SingleResponse, UserSummary, Video } from "@/types/api";
+import type { Artist, ArtistAnalytics, ArtistFanSummary, ArtistLink, ArtistPlaylist, ArtistTaxonomy, PaginatedResponse, SingleResponse, UserSummary, Video } from "@/types/api";
 import { apiRequest } from "./api";
 
 export function getArtistTaxonomy() {
@@ -87,9 +87,9 @@ export function deletePlaylist(id: number, token: string) {
 }
 
 export function getArtistAnalytics(token: string) {
-  return apiRequest<SingleResponse<{ totals: Record<string, number>; data_since: string; trends_available: boolean; daily: Array<Record<string, string | number>> }>>("/me/artist/analytics", { token });
+  return apiRequest<SingleResponse<ArtistAnalytics>>("/me/artist/analytics", { token });
 }
 
 export function getFanSummary(token: string) {
-  return apiRequest<SingleResponse<{ followers_count: number; announcement_subscribers_count: number; trends_available: boolean }>>("/me/artist/fans/summary", { token });
+  return apiRequest<SingleResponse<ArtistFanSummary>>("/me/artist/fans/summary", { token });
 }

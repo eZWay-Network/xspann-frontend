@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, CalendarClock, CheckCircle2, CircleDollarSign, ExternalLink, GripVertical, ListMusic, LoaderCircle, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
@@ -14,8 +14,8 @@ import { createAnnouncement, getOwnerAnnouncements, sendAnnouncement } from "@/s
 import { createBoost, getBoostBalance, getBoosts, getPromotionOffers, submitBoost } from "@/services/promotions";
 import { cancelReleaseSchedule, getReleases, publishRelease, retryRelease, scheduleRelease } from "@/services/releases";
 import { getMyVideos } from "@/services/videos";
-import { normalizeArtistSlug } from "@/lib/artists";
-import type { Artist, ArtistPlaylist, Boost, Release, Video } from "@/types/api";
+import { buildArtistProfilePayload, buildUtcDailySeries, FREE_ARTIST_CAPABILITIES, normalizeArtistSlug, sameOrderedIds } from "@/lib/artists";
+import type { Artist, ArtistCapabilities, ArtistPlaylist, Boost, Release, Video } from "@/types/api";
 
 type Tab = "overview" | "profile" | "releases" | "playlists" | "announcements" | "promotions";
 const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
@@ -29,18 +29,29 @@ export function StudioWorkspace() {
   const [tab, setTab] = useState<Tab>("overview");
   const [createdArtist, setCreatedArtist] = useState<Artist | null>(null);
   const artistQuery = useQuery({ queryKey: ["my-artist", user?.id], enabled: Boolean(token), queryFn: async () => { try { return (await getMyArtist(token!)).data; } catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; } } });
-  const entitlements = useQuery({ queryKey: ["entitlements", user?.id], enabled: Boolean(token), queryFn: () => getEntitlements(token!) });
+  const entitlements = useQuery({ queryKey: ["entitlements", user?.id], enabled: Boolean(token), queryFn: () => getEntitlements(token!), refetchOnWindowFocus: true });
+  const refetchEntitlements = entitlements.refetch;
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refetchEntitlements();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+  }, [refetchEntitlements]);
 
   if (artistQuery.isPending) return <div className="page-content grid h-full place-items-center"><XpnLoader label="Opening your workspace…" /></div>;
   if (artistQuery.isError) return <WorkspaceError retry={() => void artistQuery.refetch()} />;
   if (createdArtist) return <ArtistCreated artist={createdArtist} onOpenWorkspace={() => setCreatedArtist(null)} />;
-  if (!artistQuery.data) return <ProfileEditor artist={null} token={token!} userId={user!.id} onCreated={setCreatedArtist} />;
+  if (!artistQuery.data) return <ProfileEditor artist={null} token={token!} userId={user!.id} capabilities={FREE_ARTIST_CAPABILITIES} onCreated={setCreatedArtist} />;
   const artist = artistQuery.data;
+  const capabilities = entitlements.data?.data.capabilities ?? (entitlements.isError ? artist.capabilities : undefined) ?? FREE_ARTIST_CAPABILITIES;
+  const playlistUsage = entitlements.data?.data.usage?.playlists;
 
   return <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"><div className="mx-auto max-w-7xl">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-[var(--royal)]">Artist workspace</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Welcome back, {artist.stage_name}</h1><p className="mt-2 text-sm text-[var(--muted)]">Manage your identity, releases and fan relationships in one place.</p></div><div className="flex items-center gap-3"><span className="rounded-full bg-violet-500/10 px-3 py-1.5 text-xs font-bold uppercase text-[var(--royal)]">{entitlements.data?.data.effective_plan ?? artist.capabilities?.plan ?? "free"}</span><Link href={`/artists/${artist.slug}`} className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--royal)]">View public page <ExternalLink size={15} /></Link></div></div>
     <div className="mt-7 flex gap-2 overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-2 no-scrollbar">{tabs.map((item) => <button key={item.id} onClick={() => setTab(item.id)} className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition ${tab === item.id ? "bg-violet-600 text-white" : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"}`}><item.icon size={16} />{item.label}</button>)}</div>
-    <div className="mt-6">{tab === "overview" && <Overview artist={artist} token={token!} />}{tab === "profile" && <ProfileEditor artist={artist} token={token!} userId={user!.id} />}{tab === "releases" && <ReleasesPanel token={token!} userId={user!.id} canSchedule={Boolean(artist.capabilities?.release_scheduling)} />}{tab === "playlists" && <PlaylistsPanel token={token!} userId={user!.id} limit={artist.capabilities?.playlists ?? 1} />}{tab === "announcements" && <AnnouncementsPanel token={token!} userId={user!.id} enabled={(artist.capabilities?.fan_announcements ?? 0) > 0} />}{tab === "promotions" && <PromotionsPanel token={token!} userId={user!.id} />}</div>
+    <div className="mt-6">{tab === "overview" && <Overview artist={artist} token={token!} />}{tab === "profile" && <ProfileEditor artist={artist} token={token!} userId={user!.id} capabilities={capabilities} />}{tab === "releases" && <ReleasesPanel token={token!} userId={user!.id} canSchedule={capabilities.release_scheduling} />}{tab === "playlists" && <PlaylistsPanel token={token!} userId={user!.id} limit={capabilities.playlists} reportedUsage={playlistUsage} />}{tab === "announcements" && <AnnouncementsPanel token={token!} userId={user!.id} enabled={capabilities.fan_announcements > 0} />}{tab === "promotions" && <PromotionsPanel token={token!} userId={user!.id} />}</div>
   </div></section>;
 }
 
@@ -49,23 +60,64 @@ function Overview({ artist, token }: { artist: Artist; token: string }) {
   const fans = useQuery({ queryKey: ["artist-fans", artist.id], queryFn: () => getFanSummary(token) });
   const totals = analytics.data?.data.totals ?? {};
   const cards = [{ label: "Followers", value: fans.data?.data.followers_count ?? artist.followers_count, icon: Users }, { label: "Views", value: totals.views ?? 0, icon: BarChart3 }, { label: "Published videos", value: totals.videos ?? 0, icon: Music2 }, { label: "Update subscribers", value: fans.data?.data.announcement_subscribers_count ?? 0, icon: Megaphone }];
-  return <><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <div key={card.label} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-500/10 text-[var(--royal)]"><card.icon size={19} /></span><p className="mt-5 text-3xl font-semibold">{card.value.toLocaleString()}</p><p className="mt-1 text-sm text-[var(--muted)]">{card.label}</p></div>)}</div><div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px]"><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6"><h2 className="text-lg font-semibold">Performance</h2>{analytics.data?.data.trends_available ? <div className="mt-6 flex h-48 items-end gap-1">{analytics.data.data.daily.slice(-30).map((point, index) => <div key={index} title={String(point.date ?? "")} style={{ height: `${Math.max(4, Number(point.views ?? 0) / Math.max(1, ...analytics.data.data.daily.map((item) => Number(item.views ?? 0))) * 100)}%` }} className="min-w-1 flex-1 rounded-t bg-violet-500/70" />)}</div> : <div className="mt-5 rounded-xl bg-[var(--surface)] p-6 text-sm text-[var(--muted)]">30-day trends become available with Artist Starter. Current totals remain visible above.</div>}</section><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6"><h2 className="text-lg font-semibold">Profile readiness</h2><div className="mt-5 space-y-4"><Readiness done={Boolean(artist.image_url)} label="Artist image" /><Readiness done={Boolean(artist.bio)} label="Artist bio" /><Readiness done={artist.genres.length > 0} label="Genre selected" /><Readiness done={artist.links.length > 0} label="External link" /></div></section></div></>;
+  const metric = analytics.data?.data.metrics?.find((item) => item.key === "views") ?? { key: "views", label: "Recorded views" };
+  const series = analytics.data ? buildUtcDailySeries(analytics.data.data.daily, analytics.data.data.data_since) : [];
+  const maximum = Math.max(1, ...series.map((day) => Number(day.point?.[metric.key] ?? 0)));
+  return <><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <div key={card.label} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-500/10 text-[var(--royal)]"><card.icon size={19} /></span><p className="mt-5 text-3xl font-semibold">{card.value.toLocaleString()}</p><p className="mt-1 text-sm text-[var(--muted)]">{card.label}</p></div>)}</div><div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px]"><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="text-lg font-semibold">Performance</h2><p className="mt-1 text-xs text-[var(--muted)]">{metric.label} · cumulative UTC snapshots</p></div>{analytics.data?.data.data_since && <p className="text-xs text-[var(--muted)]">Collected since {new Date(analytics.data.data.data_since).toLocaleDateString()}</p>}</div>{analytics.data?.data.trends_available ? <div className="mt-6 flex h-48 items-end gap-1" aria-label={`${metric.label} for the last ${series.length} UTC days`}>{series.map((day) => <div key={day.date} title={`${day.date}: ${day.point ? Number(day.point[metric.key] ?? 0).toLocaleString() : "No data"}`} className="flex h-full min-w-1 flex-1 items-end">{day.point && <span style={{ height: `${Math.max(3, Number(day.point[metric.key] ?? 0) / maximum * 100)}%` }} className="block w-full rounded-t bg-violet-500/70" />}</div>)}</div> : <div className="mt-5 rounded-xl bg-[var(--surface)] p-6 text-sm text-[var(--muted)]">30-day trends become available with Artist Starter. Current totals remain visible above.</div>}</section><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6"><h2 className="text-lg font-semibold">Profile readiness</h2><div className="mt-5 space-y-4"><Readiness done={Boolean(artist.image_url)} label="Artist image" /><Readiness done={Boolean(artist.bio)} label="Artist bio" /><Readiness done={artist.genres.length > 0} label="Genre selected" /><Readiness done={artist.links.length > 0} label="External link" /></div></section></div></>;
 }
 
 function Readiness({ done, label }: { done: boolean; label: string }) { return <div className="flex items-center gap-3 text-sm"><CheckCircle2 size={18} className={done ? "text-emerald-400" : "text-[var(--muted)]"} /><span className={done ? "" : "text-[var(--muted)]"}>{label}</span></div>; }
 
-function ProfileEditor({ artist, token, userId, onCreated }: { artist: Artist | null; token: string; userId: number; onCreated?: (artist: Artist) => void }) {
+function ProfileEditor({ artist, token, userId, capabilities, onCreated }: { artist: Artist | null; token: string; userId: number; capabilities: ArtistCapabilities; onCreated?: (artist: Artist) => void }) {
   const client = useQueryClient();
   const taxonomy = useQuery({ queryKey: ["artist-taxonomy"], queryFn: getArtistTaxonomy });
   const ownedVideos = useQuery({ queryKey: ["my-videos", userId, "featured-release"], enabled: Boolean(artist), queryFn: () => getMyVideos(token, 50) });
-  const [draft, setDraft] = useState({ stage_name: artist?.stage_name ?? "", slug: artist?.slug ?? "", bio: artist?.bio ?? "", location: artist?.location ?? "", listed: artist?.listed ?? true, genre_ids: artist?.genres.map((genre) => genre.id) ?? [], image: artist?.image ?? null as string | null, featured_video_id: artist?.featured_video_id ?? null as number | null });
+  const [draft, setDraft] = useState({ stage_name: artist?.stage_name ?? "", slug: artist?.slug ?? "", bio: artist?.bio ?? "", location: artist?.location ?? "", listed: artist?.listed ?? true, genre_ids: artist?.genres.map((genre) => genre.id) ?? [], image: artist?.image ?? null as string | null, featured_video_id: artist?.featured_video_id ?? artist?.featured_release?.id ?? null as number | null });
   const [links, setLinks] = useState(artist?.links ?? []);
+  const [imagePreview, setImagePreview] = useState(artist?.image_url ?? null);
   const [status, setStatus] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const mutation = useMutation({ mutationFn: async () => { const saved = await saveMyArtist(draft, token); if (JSON.stringify(links) !== JSON.stringify(artist?.links ?? [])) return saveArtistLinks(links, token); return saved; }, onSuccess: (response) => { client.setQueryData(["my-artist", userId], response.data); setStatus("Artist profile saved."); if (!artist) onCreated?.(response.data); }, onError: (error) => { setFieldErrors(error instanceof ApiError ? error.errors : {}); setStatus(error instanceof ApiError ? error.message : "Could not save the artist profile."); } });
-  const imageUpload = useMutation({ mutationFn: (file: File) => uploadArtistImage(file, token), onSuccess: (response) => setDraft((current) => ({ ...current, image: response.data.storage_path })) });
-  function submit(event: FormEvent) { event.preventDefault(); setStatus(""); setFieldErrors({}); mutation.mutate(); }
-  return <div className={artist ? "" : "page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"}><div className="mx-auto max-w-3xl rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6 sm:p-8"><p className="text-sm font-semibold text-[var(--royal)]">{artist ? "Public identity" : "Artist enrollment"}</p><h1 className="mt-1 text-2xl font-semibold">{artist ? "Edit artist profile" : "Create your artist profile"}</h1><p className="mt-2 text-sm text-[var(--muted)]">{artist ? "Keep your directory information current." : "Choose your public identity. Creating an artist profile is free and keeps your existing account, followers and videos."}</p><form onSubmit={submit} className="mt-7 space-y-5"><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Stage name"><input required maxLength={120} value={draft.stage_name} onChange={(event) => setDraft({ ...draft, stage_name: event.target.value })} className="studio-input" />{fieldErrors.stage_name?.[0] && <FieldError message={fieldErrors.stage_name[0]} />}</StudioField><StudioField label="Public slug"><input required minLength={3} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeArtistSlug(event.target.value) })} className="studio-input" /><p className="mt-1 text-xs text-[var(--muted)]">Your shareable page will be /artists/{draft.slug || "your-slug"}.</p>{fieldErrors.slug?.[0] && <FieldError message={fieldErrors.slug[0]} />}</StudioField></div><StudioField label="Bio"><textarea rows={5} maxLength={2000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} className="studio-input h-auto py-3" /></StudioField><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Location"><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} className="studio-input" /></StudioField>{artist ? <StudioField label="Artist image"><div className="flex items-center gap-3">{artist.image_url && <Image src={artist.image_url} alt="" width={52} height={52} className="h-13 w-13 rounded-xl object-cover" />}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.target.files?.[0] && imageUpload.mutate(event.target.files[0])} className="studio-input py-2" /></div><p className="mt-1 text-xs text-[var(--muted)]">JPEG, PNG or WebP, up to 5 MiB.</p></StudioField> : <div className="rounded-xl bg-[var(--surface)] p-4 text-xs leading-5 text-[var(--muted)]">Save your artist profile first, then add its image and external links.</div>}</div><StudioField label="Genres (up to 5)"><div className="flex flex-wrap gap-2">{taxonomy.data?.data.genres.map((genre) => { const selected = draft.genre_ids.includes(genre.id); return <button type="button" key={genre.id} onClick={() => setDraft({ ...draft, genre_ids: selected ? draft.genre_ids.filter((id) => id !== genre.id) : draft.genre_ids.length < 5 ? [...draft.genre_ids, genre.id] : draft.genre_ids })} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selected ? "bg-violet-600 text-white" : "bg-[var(--surface)] text-[var(--muted)]"}`}>{genre.name}</button>; })}</div></StudioField>{artist && <StudioField label={`Links (${links.length}/${artist.capabilities?.links ?? 1})`}><div className="space-y-2">{links.map((link, index) => <div key={index} className="grid gap-2 sm:grid-cols-[110px_110px_1fr_40px]"><input value={link.label} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))} placeholder="Label" className="studio-input" required /><select value={link.type} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as typeof link.type } : item))} className="studio-input">{taxonomy.data?.data.link_types.map((type) => <option key={type} value={type}>{type}</option>)}</select><input type="url" pattern="https://.*" value={link.url} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} placeholder="https://" className="studio-input" required /><button type="button" aria-label={`Remove ${link.label || "link"}`} onClick={() => setLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="icon-button"><Trash2 size={16} /></button></div>)}{links.length < (artist.capabilities?.links ?? 1) && <button type="button" onClick={() => setLinks((current) => [...current, { label: "", type: "website", url: "https://" }])} className="text-sm font-bold text-[var(--royal)]">+ Add link</button>}</div></StudioField>}{artist && (artist.capabilities?.featured_release || artist.featured_video_id) && <StudioField label="Featured release"><select value={draft.featured_video_id ?? 0} onChange={(event) => setDraft({ ...draft, featured_video_id: Number(event.target.value) || null })} className="studio-input"><option value={0}>No featured release</option>{ownedVideos.data?.data.filter((video) => video.status === "published" && video.visibility === "public" && video.moderation_status === "approved").map((video) => <option key={video.id} value={video.id}>{video.caption || `Video #${video.id}`}</option>)}</select></StudioField>}<label className="flex items-center gap-3 rounded-xl bg-[var(--surface)] p-4 text-sm"><input type="checkbox" checked={draft.listed} onChange={(event) => setDraft({ ...draft, listed: event.target.checked })} className="accent-violet-600" /><span><b>Show in the artist directory</b><span className="mt-1 block text-xs text-[var(--muted)]">Your public slug remains shareable when this is off.</span></span></label>{status && <p role={mutation.isError ? "alert" : "status"} className={mutation.isError ? "text-sm text-pink-400" : "text-sm text-[var(--muted)]"}>{status}</p>}<button disabled={mutation.isPending || imageUpload.isPending} className="primary-button">{mutation.isPending && <LoaderCircle size={16} className="animate-spin" />}{artist ? "Save changes" : "Create artist profile"}</button>{!artist && <Link href="/feed" className="ml-3 text-sm font-bold text-[var(--muted)]">Continue to feed</Link>}</form></div></div>;
+  const linksDirty = JSON.stringify(links) !== JSON.stringify(artist?.links ?? []);
+  const linksOverLimit = links.length > capabilities.links;
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const saved = await saveMyArtist(buildArtistProfilePayload(artist, draft, capabilities.featured_release), token);
+      if (linksDirty) return saveArtistLinks(links, token);
+      return saved;
+    },
+    onSuccess: (response) => {
+      client.setQueryData(["my-artist", userId], response.data);
+      void client.invalidateQueries({ queryKey: ["artist"] });
+      void client.invalidateQueries({ queryKey: ["artists"] });
+      setStatus("Artist profile saved.");
+      if (!artist) onCreated?.(response.data);
+    },
+    onError: (error) => {
+      setFieldErrors(error instanceof ApiError ? error.errors : {});
+      setStatus(error instanceof ApiError ? error.message : "Could not save the artist profile.");
+      if (error instanceof ApiError && error.status === 403) void client.invalidateQueries({ queryKey: ["entitlements", userId] });
+    },
+  });
+  const imageUpload = useMutation({
+    mutationFn: (file: File) => uploadArtistImage(file, token),
+    onSuccess: (response) => {
+      setDraft((current) => ({ ...current, image: response.data.storage_path }));
+      setImagePreview(response.data.image_url);
+      setStatus("Image uploaded. Save changes to apply it.");
+    },
+    onError: (error) => setStatus(error instanceof ApiError ? error.message : "Could not upload the artist image."),
+  });
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    setStatus("");
+    setFieldErrors({});
+    if (linksDirty && linksOverLimit) {
+      setStatus(`Your current plan allows ${capabilities.links} ${capabilities.links === 1 ? "link" : "links"}. Remove extras before saving a links change.`);
+      return;
+    }
+    mutation.mutate();
+  }
+  return <div className={artist ? "" : "page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"}><div className="mx-auto max-w-3xl rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6 sm:p-8"><p className="text-sm font-semibold text-[var(--royal)]">{artist ? "Public identity" : "Artist enrollment"}</p><h1 className="mt-1 text-2xl font-semibold">{artist ? "Edit artist profile" : "Create your artist profile"}</h1><p className="mt-2 text-sm text-[var(--muted)]">{artist ? "Keep your directory information current. Saved paid values stay here after a downgrade even when the public page no longer presents them." : "Choose your public identity. Creating an artist profile is free and keeps your existing account, followers and videos."}</p><form onSubmit={submit} className="mt-7 space-y-5"><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Stage name"><input required maxLength={120} value={draft.stage_name} onChange={(event) => setDraft({ ...draft, stage_name: event.target.value })} className="studio-input" />{fieldErrors.stage_name?.[0] && <FieldError message={fieldErrors.stage_name[0]} />}</StudioField><StudioField label="Public slug"><input required minLength={3} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeArtistSlug(event.target.value) })} className="studio-input" /><p className="mt-1 text-xs text-[var(--muted)]">Your shareable page will be /artists/{draft.slug || "your-slug"}.</p>{fieldErrors.slug?.[0] && <FieldError message={fieldErrors.slug[0]} />}</StudioField></div><StudioField label="Bio"><textarea rows={5} maxLength={2000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} className="studio-input h-auto py-3" /></StudioField><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Location"><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} className="studio-input" /></StudioField>{artist ? <StudioField label="Artist image"><div className="flex items-center gap-3">{imagePreview && <Image src={imagePreview} alt="" width={52} height={52} className="h-13 w-13 rounded-xl object-cover" />}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.target.files?.[0] && imageUpload.mutate(event.target.files[0])} className="studio-input py-2" /></div><p className="mt-1 text-xs text-[var(--muted)]">JPEG, PNG or WebP, up to 5 MiB.</p></StudioField> : <div className="rounded-xl bg-[var(--surface)] p-4 text-xs leading-5 text-[var(--muted)]">Save your artist profile first, then add its image and external links.</div>}</div><StudioField label="Genres (up to 5)"><div className="flex flex-wrap gap-2">{taxonomy.data?.data.genres.map((genre) => { const selected = draft.genre_ids.includes(genre.id); return <button type="button" key={genre.id} onClick={() => setDraft({ ...draft, genre_ids: selected ? draft.genre_ids.filter((id) => id !== genre.id) : draft.genre_ids.length < 5 ? [...draft.genre_ids, genre.id] : draft.genre_ids })} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selected ? "bg-violet-600 text-white" : "bg-[var(--surface)] text-[var(--muted)]"}`}>{genre.name}</button>; })}</div></StudioField>{artist && <StudioField label={`Links (${links.length}/${capabilities.links})`}><div className="space-y-2">{linksOverLimit && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300"><span>These saved links are above the current plan limit. Unrelated profile edits preserve them; remove extras before changing links.</span><Link href="/pricing" className="font-bold underline">Update plan</Link></div>}{links.map((link, index) => <div key={index} className="grid gap-2 sm:grid-cols-[110px_110px_1fr_40px]"><input value={link.label} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))} placeholder="Label" className="studio-input" required /><select value={link.type} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as typeof link.type } : item))} className="studio-input">{taxonomy.data?.data.link_types.map((type) => <option key={type} value={type}>{type}</option>)}</select><input type="url" pattern="https://.*" value={link.url} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} placeholder="https://" className="studio-input" required /><button type="button" aria-label={`Remove ${link.label || "link"}`} onClick={() => setLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="icon-button"><Trash2 size={16} /></button></div>)}{links.length < capabilities.links && <button type="button" onClick={() => setLinks((current) => [...current, { label: "", type: "website", url: "https://" }])} className="text-sm font-bold text-[var(--royal)]">+ Add link</button>}</div></StudioField>}{artist && (capabilities.featured_release || draft.featured_video_id) && <StudioField label="Featured release"><select disabled={!capabilities.featured_release} value={draft.featured_video_id ?? 0} onChange={(event) => setDraft({ ...draft, featured_video_id: Number(event.target.value) || null })} className="studio-input"><option value={0}>No featured release</option>{ownedVideos.data?.data.filter((video) => video.status === "published" && video.visibility === "public" && video.moderation_status === "approved").map((video) => <option key={video.id} value={video.id}>{video.caption || `Video #${video.id}`}</option>)}</select>{!capabilities.featured_release && <p className="mt-1 text-xs text-amber-300">Your selection remains saved, but the current plan does not present it publicly. <Link href="/pricing" className="font-bold underline">Update plan</Link></p>}</StudioField>}<label className="flex items-center gap-3 rounded-xl bg-[var(--surface)] p-4 text-sm"><input type="checkbox" checked={draft.listed} onChange={(event) => setDraft({ ...draft, listed: event.target.checked })} className="accent-violet-600" /><span><b>Show in the artist directory</b><span className="mt-1 block text-xs text-[var(--muted)]">Your public slug remains shareable when this is off.</span></span></label>{status && <p role={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "alert" : "status"} className={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "text-sm text-pink-400" : "text-sm text-[var(--muted)]"}>{status}</p>}<button disabled={mutation.isPending || imageUpload.isPending} className="primary-button">{mutation.isPending && <LoaderCircle size={16} className="animate-spin" />}{artist ? "Save changes" : "Create artist profile"}</button>{!artist && <Link href="/feed" className="ml-3 text-sm font-bold text-[var(--muted)]">Continue to feed</Link>}</form></div></div>;
 }
 
 function ArtistCreated({ artist, onOpenWorkspace }: { artist: Artist; onOpenWorkspace: () => void }) {
@@ -84,22 +136,26 @@ function ReleaseRow({ release, thumbnailUrl, canSchedule, scheduleOpen, publishA
   return <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-900">{thumbnailUrl && <Image src={thumbnailUrl} alt="" fill sizes="64px" className="object-cover" />}</div><div className="min-w-0 flex-1"><p className="truncate font-semibold">{release.caption || "Untitled release"}</p><p className="mt-1 text-xs text-[var(--muted)]">{release.processing_state} · {release.publication_state} · v{release.version}</p>{release.error_code && <p className="mt-1 text-xs text-pink-400">{release.error_code}</p>}</div><div className="flex flex-wrap gap-2">{release.processing_state === "failed" && <SmallButton onClick={onRetry}>Retry</SmallButton>}{release.publication_state === "draft" && release.processing_state === "ready" && <SmallButton onClick={onPublish}>Publish</SmallButton>}{release.publication_state === "scheduled" && <SmallButton onClick={onCancelSchedule}>Cancel schedule</SmallButton>}{release.publication_state === "draft" && canSchedule && release.processing_state === "ready" && <SmallButton onClick={onScheduleOpen}>Schedule</SmallButton>}</div></div>{scheduleOpen && <div className="mt-4 flex flex-col gap-2 border-t border-[var(--line)] pt-4 sm:flex-row"><input type="datetime-local" value={publishAt} onChange={(event) => setPublishAt(event.target.value)} className="studio-input" /><button disabled={!publishAt} onClick={onSchedule} className="primary-button">Confirm schedule</button></div>}</div>;
 }
 
-function PlaylistsPanel({ token, userId, limit }: { token: string; userId: number; limit: number }) {
+function PlaylistsPanel({ token, userId, limit, reportedUsage }: { token: string; userId: number; limit: number; reportedUsage?: number }) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["my-playlists", userId], queryFn: () => getMyPlaylists(token) });
-  const playlistCount = query.data?.meta.total ?? query.data?.data.length ?? 0;
+  const taxonomy = useQuery({ queryKey: ["artist-taxonomy"], queryFn: getArtistTaxonomy, staleTime: 60 * 60_000 });
+  const playlistCount = Math.max(reportedUsage ?? 0, query.data?.meta.total ?? query.data?.data.length ?? 0);
   const limitReached = !query.isPending && playlistCount >= limit;
   const [title, setTitle] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const create = useMutation({
-    mutationFn: () => createPlaylist({ title, category: "release", visibility: "public" }, token),
+    mutationFn: () => createPlaylist({ title, category: taxonomy.data?.data.playlist_categories[0] ?? "release", visibility: "public" }, token),
     onSuccess: (response) => {
       setTitle("");
       setSelectedId(response.data.id);
       void client.invalidateQueries({ queryKey: ["my-playlists", userId] });
     },
-    onError: (caught) => setError(caught instanceof ApiError ? caught.message : "Could not create playlist."),
+    onError: (caught) => {
+      setError(caught instanceof ApiError ? caught.message : "Could not create playlist.");
+      if (caught instanceof ApiError && caught.status === 403) void client.invalidateQueries({ queryKey: ["entitlements", userId] });
+    },
   });
 
   async function remove(playlist: ArtistPlaylist) {
@@ -129,7 +185,7 @@ function PlaylistsPanel({ token, userId, limit }: { token: string; userId: numbe
     {error && <InlineError message={error} />}
     <div className="grid gap-4 sm:grid-cols-2">{query.data?.data.map((playlist) => <PlaylistSummaryCard key={playlist.id} playlist={playlist} selected={selectedId === playlist.id} onEdit={() => setSelectedId(selectedId === playlist.id ? null : playlist.id)} onDelete={() => void remove(playlist)} />)}</div>
     {!query.isPending && !query.data?.data.length && <Empty icon={ListMusic} title="No playlists" text="Create a collection for your releases, live clips or behind-the-scenes posts." />}
-    {selectedId && <PlaylistEditor key={selectedId} id={selectedId} token={token} userId={userId} onClose={() => setSelectedId(null)} />}
+    {selectedId && <PlaylistEditor key={selectedId} id={selectedId} token={token} userId={userId} categories={taxonomy.data?.data.playlist_categories ?? []} genres={taxonomy.data?.data.genres ?? []} onClose={() => setSelectedId(null)} />}
   </Panel>;
 }
 
@@ -168,19 +224,21 @@ function PlaylistSummaryCard({ playlist, selected, onEdit, onDelete }: { playlis
   );
 }
 
-function PlaylistEditor({ id, token, userId, onClose }: { id: number; token: string; userId: number; onClose: () => void }) {
+function PlaylistEditor({ id, token, userId, categories, genres, onClose }: { id: number; token: string; userId: number; categories: string[]; genres: Array<{ id: number; name: string }>; onClose: () => void }) {
   const detail = useQuery({ queryKey: ["my-playlist", id], queryFn: () => getMyPlaylist(id, token) });
   const videos = useQuery({ queryKey: ["my-videos", userId, "playlist-editor"], queryFn: () => getMyVideos(token, 50) });
   if (detail.isPending) return <div className="mt-6"><XpnLoader compact label="Opening playlist…" /></div>;
   if (!detail.data) return <div className="mt-6"><InlineError message="Playlist detail could not be loaded." /></div>;
-  return <PlaylistEditorForm key={`${id}-${detail.data.data.version}`} playlist={detail.data.data} availableVideos={videos.data?.data ?? []} token={token} userId={userId} onClose={onClose} onReload={() => void detail.refetch()} />;
+  return <PlaylistEditorForm key={`${id}-${detail.data.data.version}`} playlist={detail.data.data} availableVideos={videos.data?.data ?? []} token={token} userId={userId} categories={categories} genres={genres} onClose={onClose} onReload={() => void detail.refetch()} />;
 }
 
-function PlaylistEditorForm({ playlist, availableVideos, token, userId, onClose, onReload }: { playlist: ArtistPlaylist; availableVideos: Video[]; token: string; userId: number; onClose: () => void; onReload: () => void }) {
+function PlaylistEditorForm({ playlist, availableVideos, token, userId, categories, genres, onClose, onReload }: { playlist: ArtistPlaylist; availableVideos: Video[]; token: string; userId: number; categories: string[]; genres: Array<{ id: number; name: string }>; onClose: () => void; onReload: () => void }) {
   const client = useQueryClient();
-  const [draft, setDraft] = useState({ title: playlist.title, description: playlist.description ?? "", category: playlist.category, visibility: playlist.visibility });
+  const [draft, setDraft] = useState({ title: playlist.title, description: playlist.description ?? "", category: playlist.category, visibility: playlist.visibility, genre_id: playlist.genre_id });
   const [videoIds, setVideoIds] = useState(playlist.items?.map((item) => item.video_id) ?? playlist.videos?.map((video) => video.id) ?? []);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const videos = Array.from(new Map([
     ...(playlist.videos ?? []),
@@ -211,19 +269,40 @@ function PlaylistEditorForm({ playlist, availableVideos, token, userId, onClose,
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!playlist.version) return;
+    if (playlist.version === undefined) return;
     setSaving(true);
     setError("");
+    setNotice("");
+    setConflict(false);
     try {
-      const metadata = await updatePlaylist(playlist.id, { ...draft, description: draft.description || null, version: playlist.version }, token);
-      await replacePlaylistItems(playlist.id, metadata.data.version ?? playlist.version + 1, videoIds, token);
+      const initialVideoIds = playlist.items?.map((item) => item.video_id) ?? playlist.videos?.map((video) => video.id) ?? [];
+      const metadataChanged = draft.title !== playlist.title || draft.description !== (playlist.description ?? "") || draft.category !== playlist.category || draft.visibility !== playlist.visibility || draft.genre_id !== playlist.genre_id;
+      const itemsChanged = !sameOrderedIds(videoIds, initialVideoIds);
+      let version = playlist.version;
+      if (metadataChanged) {
+        const metadata = await updatePlaylist(playlist.id, { ...draft, description: draft.description || null, version }, token);
+        version = metadata.data.version ?? version + 1;
+      }
+      if (itemsChanged) await replacePlaylistItems(playlist.id, version, videoIds, token);
+      if (!metadataChanged && !itemsChanged) {
+        setNotice("No playlist changes to save.");
+        return;
+      }
       await Promise.all([
         client.invalidateQueries({ queryKey: ["my-playlists", userId] }),
         client.invalidateQueries({ queryKey: ["my-playlist", playlist.id] }),
+        client.invalidateQueries({ queryKey: ["artist-playlists"] }),
+        client.invalidateQueries({ queryKey: ["artist-playlist"] }),
       ]);
       onReload();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not save the playlist.");
+      if (caught instanceof ApiError && caught.status === 409) {
+        setConflict(true);
+        setError("This playlist changed in another tab. Reload the latest version, then reapply your changes.");
+      } else {
+        setError(caught instanceof ApiError ? caught.message : "Could not save the playlist.");
+      }
+      if (caught instanceof ApiError && caught.status === 403) void client.invalidateQueries({ queryKey: ["entitlements", userId] });
     } finally {
       setSaving(false);
     }
@@ -241,13 +320,15 @@ function PlaylistEditorForm({ playlist, availableVideos, token, userId, onClose,
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <StudioField label="Title"><input disabled={playlist.read_only} required maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="studio-input" /></StudioField>
         <StudioField label="Visibility"><select disabled={playlist.read_only} value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "public" | "private" })} className="studio-input"><option value="public">Public</option><option value="private">Private</option></select></StudioField>
-        <StudioField label="Category"><select disabled={playlist.read_only} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="studio-input">{["release", "live", "behind_the_scenes", "other"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></StudioField>
+        <StudioField label="Category"><select disabled={playlist.read_only} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="studio-input">{Array.from(new Set([playlist.category, ...categories])).map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></StudioField>
         <StudioField label="Description"><input disabled={playlist.read_only} maxLength={2000} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="studio-input" /></StudioField>
+        <StudioField label="Genre"><select disabled={playlist.read_only} value={draft.genre_id ?? 0} onChange={(event) => setDraft({ ...draft, genre_id: Number(event.target.value) || null })} className="studio-input"><option value={0}>No genre</option>{genres.map((genre) => <option key={genre.id} value={genre.id}>{genre.name}</option>)}</select></StudioField>
       </div>
 
       <PlaylistVideoPicker videos={videos} videoIds={videoIds} disabled={Boolean(playlist.read_only)} onAdd={addVideo} onRemove={removeVideo} onReorder={reorderVideo} />
 
-      {error && <div className="mt-4"><InlineError message={error} />{error.toLowerCase().includes("version") && <button type="button" onClick={onReload} className="text-sm font-bold text-[var(--royal)]">Reload latest version</button>}</div>}
+      {notice && <p role="status" className="mt-4 text-sm text-[var(--muted)]">{notice}</p>}
+      {error && <div className="mt-4"><InlineError message={error} />{conflict && <button type="button" onClick={onReload} className="text-sm font-bold text-[var(--royal)]">Reload latest version</button>}</div>}
       <button disabled={playlist.read_only || saving} className="primary-button mt-5">{saving && <LoaderCircle size={16} className="animate-spin" />} Save playlist</button>
     </form>
   );

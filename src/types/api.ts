@@ -223,6 +223,18 @@ export type ArtistPlaylist = {
   items?: Array<{ video_id: number; position: number; video?: Video }>;
   created_at: string; updated_at: string;
 };
+export type ArtistAnalytics = {
+  totals: Record<string, number>;
+  data_since: string;
+  trends_available: boolean;
+  metrics?: Array<{ key: string; label: string; description?: string }>;
+  daily: Array<Record<string, string | number>>;
+};
+export type ArtistFanSummary = {
+  followers_count: number;
+  announcement_subscribers_count: number;
+  trends_available: boolean;
+};
 
 export type PlanOffer = {
   code: string; name?: string; amount: number; currency: string; interval?: string; offer_version?: string;

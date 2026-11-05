@@ -170,6 +170,9 @@ export function ProfileCard({ username }: { username: string }) {
         following: response.data.following,
         followers_count: response.data.followers_count,
       }));
+      void queryClient.invalidateQueries({ queryKey: ["artist"] });
+      void queryClient.invalidateQueries({ queryKey: ["artists"] });
+      void queryClient.invalidateQueries({ queryKey: ["artist-followers"] });
     } catch {
       setFollowError("Could not update follow right now.");
       setCachedProfile((current) => ({
