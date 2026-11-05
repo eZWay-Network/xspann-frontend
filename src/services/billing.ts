@@ -18,10 +18,35 @@ export const cancelSubscription = (token: string) => apiRequest<SingleResponse<S
 export const resumeSubscription = (token: string) => apiRequest<SingleResponse<Subscription>>("/billing/subscription/resume", { method: "POST", token });
 
 const CHECKOUT_ATTEMPT_KEY = "xpn-billing-checkout-attempt";
-export type StoredCheckoutAttempt = { key: string; planCode: string; offerVersion: string; reference?: string; createdAt: string };
-export function getStoredCheckoutAttempt(): StoredCheckoutAttempt | null {
+const CHECKOUT_ATTEMPT_EVENT = "xpn-billing-checkout-attempt-changed";
+export type StoredCheckoutAttempt = { userId: number; key: string; planCode: string; offerVersion: string; reference?: string; checkoutUrl?: string; createdAt: string; lastAttemptAt?: string };
+function checkoutAttemptKey(userId: number) { return `${CHECKOUT_ATTEMPT_KEY}:${userId}`; }
+export function getCheckoutAttemptSnapshot(userId: number) {
   if (typeof window === "undefined") return null;
-  try { return JSON.parse(localStorage.getItem(CHECKOUT_ATTEMPT_KEY) ?? "null") as StoredCheckoutAttempt | null; } catch { return null; }
+  return localStorage.getItem(checkoutAttemptKey(userId));
 }
-export function storeCheckoutAttempt(value: StoredCheckoutAttempt) { localStorage.setItem(CHECKOUT_ATTEMPT_KEY, JSON.stringify(value)); }
-export function clearCheckoutAttempt() { localStorage.removeItem(CHECKOUT_ATTEMPT_KEY); }
+export function parseCheckoutAttemptSnapshot(snapshot: string | null, userId: number): StoredCheckoutAttempt | null {
+  try {
+    const value = JSON.parse(snapshot ?? "null") as StoredCheckoutAttempt | null;
+    return value?.userId === userId ? value : null;
+  } catch { return null; }
+}
+export function subscribeCheckoutAttempts(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(CHECKOUT_ATTEMPT_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(CHECKOUT_ATTEMPT_EVENT, onStoreChange);
+  };
+}
+export function getStoredCheckoutAttempt(userId: number): StoredCheckoutAttempt | null {
+  return parseCheckoutAttemptSnapshot(getCheckoutAttemptSnapshot(userId), userId);
+}
+export function storeCheckoutAttempt(value: StoredCheckoutAttempt) {
+  localStorage.setItem(checkoutAttemptKey(value.userId), JSON.stringify(value));
+  window.dispatchEvent(new Event(CHECKOUT_ATTEMPT_EVENT));
+}
+export function clearCheckoutAttempt(userId: number) {
+  localStorage.removeItem(checkoutAttemptKey(userId));
+  window.dispatchEvent(new Event(CHECKOUT_ATTEMPT_EVENT));
+}

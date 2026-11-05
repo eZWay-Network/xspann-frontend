@@ -59,3 +59,31 @@ export async function apiDownload(path: string, token: string, signal?: AbortSig
 
   return response.blob();
 }
+
+export async function apiMediaBlob(path: string, token: string, signal?: AbortSignal) {
+  const apiBase = new URL(API_URL);
+  const target = /^https?:\/\//i.test(path)
+    ? new URL(path)
+    : path.startsWith("/api/")
+      ? new URL(path, apiBase.origin)
+      : new URL(`${API_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
+  const trustedApiOrigin = target.origin === apiBase.origin;
+  const response = await fetch(target, {
+    headers: {
+      Accept: "video/*,audio/*,image/*,application/octet-stream",
+      ...(trustedApiOrigin ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",
+    redirect: "follow",
+    signal,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new ApiError(payload?.message ?? `Preview failed: ${response.status}`, response.status, payload?.errors ?? {});
+  }
+
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (contentLength > 250 * 1024 * 1024) throw new ApiError("This private preview is too large to load in the browser.", 413);
+  return response.blob();
+}

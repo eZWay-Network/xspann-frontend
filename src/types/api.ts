@@ -244,7 +244,7 @@ export type PlanCatalog = { offers: PlanOffer[]; environment: "test" | "live"; l
 export type Entitlements = { effective_plan: string; access_ends_at: string | null; capabilities: ArtistCapabilities; usage?: Record<string, number> };
 export type Subscription = { effective_plan: string; paid_through: string | null; cancel_at_period_end: boolean; renewal_pending: boolean; status?: string };
 export type Invoice = { id: string | number; amount_paid: number; currency: string; status: string; created_at: string; receipt_url: string | null };
-export type CheckoutStatus = { reference: string; status: string; payment_status?: string; plan_code?: string; access_pending?: boolean };
+export type CheckoutStatus = { reference: string; status: string; payment_status?: string; plan_code?: string; access_pending?: boolean; expires_at?: string | null };
 
 export type Release = Video & {
   version: number; processing_state: "processing" | "ready" | "failed";

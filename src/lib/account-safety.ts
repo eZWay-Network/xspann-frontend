@@ -28,7 +28,7 @@ export function safeInternalPath(path: string | null, fallback = "/feed") {
 }
 
 export function isRecoveryPath(pathname: string) {
-  return ["/settings/privacy", "/settings/billing"].some(
+  return ["/settings/privacy", "/settings/billing", "/billing/return", "/billing/cancel"].some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }

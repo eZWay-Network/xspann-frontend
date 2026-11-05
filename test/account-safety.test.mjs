@@ -33,6 +33,8 @@ test("allows only local post-login return paths", () => {
 test("keeps restricted sessions inside exact recovery routes", () => {
   assert.equal(isRecoveryPath("/settings/privacy"), true);
   assert.equal(isRecoveryPath("/settings/billing/invoices"), true);
+  assert.equal(isRecoveryPath("/billing/return"), true);
+  assert.equal(isRecoveryPath("/billing/cancel"), true);
   assert.equal(isRecoveryPath("/settings/privacy-impersonation"), false);
   assert.equal(isRecoveryPath("/feed"), false);
 });

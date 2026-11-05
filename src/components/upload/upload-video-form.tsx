@@ -49,7 +49,7 @@ const supportedAudioTypes = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp
 const customAudioTrackId = "custom-upload";
 
 type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "processing-video" | "done";
-type CreatedVideoStatus = "processing" | "published" | "draft-ready" | "failed";
+type CreatedVideoStatus = "processing" | "published" | "draft-ready" | "failed" | "uncertain";
 type PreviewMode = "feed" | "profile" | "web";
 type Visibility = "public" | "followers" | "private";
 type CropMode = "fill" | "fit";
@@ -424,6 +424,7 @@ export function UploadVideoForm() {
     }
 
     submittingRef.current = true;
+    let createRequestStarted = false;
     try {
       pausePreview();
       setError("");
@@ -469,6 +470,7 @@ export function UploadVideoForm() {
       }
 
       setStep("publishing");
+      createRequestStarted = true;
       const video = await createVideo({
         storage_path: storagePath,
         caption: caption.trim() || undefined,
@@ -487,6 +489,7 @@ export function UploadVideoForm() {
         original_audio_muted: externalSoundSelected,
         filter_settings: filters,
       }, token);
+      createRequestStarted = false;
 
       clearFile();
       setCreatedVideoId(video.data.id);
@@ -508,6 +511,14 @@ export function UploadVideoForm() {
       }
       setStep("done");
     } catch (caught) {
+      if (createRequestStarted && !(caught instanceof ApiError)) {
+        setCreatedVideoStatus("uncertain");
+        setStep("done");
+        setError("The upload finished, but the video-creation response was lost. Check Studio and My Posts before replacing or uploading this file again; the API may already be processing it.");
+        void queryClient.invalidateQueries({ queryKey: ["releases"] });
+        void queryClient.invalidateQueries({ queryKey: ["my-videos"] });
+        return;
+      }
       setStep("idle");
       if (caught instanceof ApiError) {
         const firstError = Object.values(caught.errors).flat()[0];
@@ -709,6 +720,7 @@ export function UploadVideoForm() {
             {createdVideoId && createdVideoStatus === "published" && <Status tone="success" text="Your video is published and ready to watch." />}
             {createdVideoId && createdVideoStatus === "draft-ready" && <Status tone="success" text="Your private draft is ready to review in Studio." />}
             {createdVideoId && createdVideoStatus === "processing" && <Status tone="success" text="Upload accepted. Your video is still processing—check My Posts for its current state before uploading it again." />}
+            {createdVideoStatus === "uncertain" && <Status tone="error" text="Creation status is uncertain. Check Studio and My Posts before trying this upload again." />}
             {error && <Status tone="error" text={error} />}
             {submitting && <Progress step={step} />}
 
