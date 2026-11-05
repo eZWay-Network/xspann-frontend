@@ -5,64 +5,73 @@ import { useQueryClient } from "@tanstack/react-query";
 import Pusher from "pusher-js";
 import { useAuth } from "@/components/common/auth-provider";
 import { queryKeys } from "@/lib/query-keys";
-import { REALTIME_HINT_EVENT, RealtimeHintTracker, setRealtimeStatus } from "@/lib/realtime";
-import { API_URL } from "@/services/api";
-import { createRealtimeSession } from "@/services/realtime";
+import { REALTIME_HINT_EVENT, RealtimeHintTracker, scheduleRealtimeExpiry, setRealtimeStatus } from "@/lib/realtime";
+import { authorizeRealtimeChannel, createRealtimeSession } from "@/services/realtime";
 
 export function RealtimeBridge() {
   const { token, user } = useAuth();
+  const userId = user?.restricted_access ? undefined : user?.id;
   const client = useQueryClient();
 
   useEffect(() => {
-    if (!token || !user) { setRealtimeStatus("offline"); return; }
+    if (!token || userId === undefined) { setRealtimeStatus("offline"); return; }
     let pusher: Pusher | null = null;
     let stopped = false;
-    let startupTimer = 0;
-    let renewalTimer = 0;
+    let opening = false;
+    let expiresAt = Infinity;
+    let cancelExpiry: (() => void) | undefined;
     const tracker = new RealtimeHintTracker();
     setRealtimeStatus("connecting");
-    startupTimer = window.setTimeout(() => setRealtimeStatus("offline"), 5_000);
+    const startupTimer = window.setTimeout(() => setRealtimeStatus("offline"), 5_000);
 
     const invalidate = (event: string, payload: Record<string, unknown>) => {
       if (!tracker.accept(event, payload)) return;
       window.dispatchEvent(new CustomEvent(REALTIME_HINT_EVENT, { detail: { event, payload } }));
       const conversationId = Number(payload.conversation_id ?? 0);
       if (event === "message.created" || event === "conversation.updated") {
-        void client.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-        void client.invalidateQueries({ queryKey: ["conversation-unread", user.id] });
-        if (conversationId > 0) void client.invalidateQueries({ queryKey: queryKeys.messages(user.id, conversationId) });
+        void client.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
+        void client.invalidateQueries({ queryKey: ["conversation-unread", userId] });
+        if (conversationId > 0) void client.invalidateQueries({ queryKey: queryKeys.messages(userId, conversationId) });
       }
       if (event === "notification.created" || event === "notifications.updated") {
-        void client.invalidateQueries({ queryKey: queryKeys.notifications(user.id) });
-        void client.invalidateQueries({ queryKey: queryKeys.announcements(user.id) });
+        void client.invalidateQueries({ queryKey: queryKeys.notifications(userId) });
+        void client.invalidateQueries({ queryKey: queryKeys.announcements(userId) });
       }
       if (event === "release.updated") {
-        void client.invalidateQueries({ queryKey: ["releases", user.id] });
-        void client.invalidateQueries({ queryKey: ["my-videos", user.id] });
+        void client.invalidateQueries({ queryKey: ["releases", userId] });
+        void client.invalidateQueries({ queryKey: ["my-videos", userId] });
       }
       if (event === "entitlements.updated") {
-        void client.invalidateQueries({ queryKey: ["entitlements", user.id] });
-        void client.invalidateQueries({ queryKey: ["subscription", user.id] });
+        void client.invalidateQueries({ queryKey: ["entitlements", userId] });
+        void client.invalidateQueries({ queryKey: ["subscription", userId] });
       }
       if (event === "boost.updated" || event === "placement.updated") {
-        void client.invalidateQueries({ queryKey: ["boosts", user.id] });
-        void client.invalidateQueries({ queryKey: ["boost-balance", user.id] });
-        void client.invalidateQueries({ queryKey: ["boost-ledger", user.id] });
-        void client.invalidateQueries({ queryKey: ["artist-placements", user.id] });
+        void client.invalidateQueries({ queryKey: ["boosts", userId] });
+        void client.invalidateQueries({ queryKey: ["boost-balance", userId] });
+        void client.invalidateQueries({ queryKey: ["boost-ledger", userId] });
+        void client.invalidateQueries({ queryKey: ["artist-placements", userId] });
         void client.invalidateQueries({ queryKey: ["promoted-placements"] });
         void client.invalidateQueries({ queryKey: ["featured-artists"] });
       }
     };
 
+    const disconnect = () => {
+      pusher?.disconnect();
+      setRealtimeStatus("offline");
+    };
+
     const connect = async () => {
+      if (opening || stopped) return;
+      opening = true;
       try {
         const { data: session } = await createRealtimeSession(token);
         if (stopped) return;
-        const apiOrigin = new URL(API_URL).origin;
-        const authorizationUrl = new URL(session.auth_url, apiOrigin);
-        if (authorizationUrl.origin !== apiOrigin) throw new Error("Relay authorization must use the trusted API origin.");
+        expiresAt = Date.parse(session.expires_at);
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+          setRealtimeStatus("offline");
+          return;
+        }
 
-        pusher?.disconnect();
         pusher = new Pusher(session.key, {
           cluster: "mt1",
           wsHost: session.host,
@@ -72,9 +81,12 @@ export function RealtimeBridge() {
           enabledTransports: ["ws", "wss"],
           disableStats: true,
           channelAuthorization: {
-            endpoint: authorizationUrl.toString(),
-            transport: "ajax",
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            customHandler: ({ socketId, channelName }, done) => {
+              void authorizeRealtimeChannel(socketId, channelName, token).then(
+                (auth) => done(null, auth),
+                (error: Error) => done(error, null),
+              );
+            },
           },
         });
         pusher.connection.bind("unavailable", () => setRealtimeStatus("offline"));
@@ -87,11 +99,11 @@ export function RealtimeBridge() {
           setRealtimeStatus("ready");
           window.dispatchEvent(new CustomEvent(REALTIME_HINT_EVENT, { detail: { event: "relay.subscribed", payload: {} } }));
           void Promise.all([
-            client.invalidateQueries({ queryKey: queryKeys.conversations(user.id) }),
-            client.invalidateQueries({ queryKey: ["messages", user.id] }),
-            client.invalidateQueries({ queryKey: ["conversation-unread", user.id] }),
-            client.invalidateQueries({ queryKey: queryKeys.notifications(user.id) }),
-            client.invalidateQueries({ queryKey: queryKeys.announcements(user.id) }),
+            client.invalidateQueries({ queryKey: queryKeys.conversations(userId) }),
+            client.invalidateQueries({ queryKey: ["messages", userId] }),
+            client.invalidateQueries({ queryKey: ["conversation-unread", userId] }),
+            client.invalidateQueries({ queryKey: queryKeys.notifications(userId) }),
+            client.invalidateQueries({ queryKey: queryKeys.announcements(userId) }),
           ]);
         });
         channel.bind("pusher:subscription_error", () => setRealtimeStatus("offline"));
@@ -99,26 +111,24 @@ export function RealtimeBridge() {
           channel.bind(event, (payload: unknown) => invalidate(event, payload && typeof payload === "object" ? payload as Record<string, unknown> : {}));
         }
 
-        const renewIn = new Date(session.expires_at).getTime() - Date.now() - 5_000;
-        renewalTimer = window.setTimeout(() => {
-          if (stopped) return;
-          setRealtimeStatus("offline");
-          pusher?.disconnect();
-          void connect();
-        }, Math.max(1_000, renewIn));
+        // Relay sessions share the login token's expiry. A new token starts a new effect.
+        cancelExpiry = scheduleRealtimeExpiry(expiresAt, disconnect);
       } catch {
-        setRealtimeStatus("offline");
+        if (!stopped) setRealtimeStatus("offline");
+      } finally {
+        opening = false;
       }
     };
 
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void client.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void client.invalidateQueries({ queryKey: ["messages", user.id] });
-      void client.invalidateQueries({ queryKey: ["conversation-unread", user.id] });
-      void client.invalidateQueries({ queryKey: queryKeys.notifications(user.id) });
-      void client.invalidateQueries({ queryKey: queryKeys.announcements(user.id) });
-      if (!pusher) void connect();
+      void client.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
+      void client.invalidateQueries({ queryKey: ["messages", userId] });
+      void client.invalidateQueries({ queryKey: ["conversation-unread", userId] });
+      void client.invalidateQueries({ queryKey: queryKeys.notifications(userId) });
+      void client.invalidateQueries({ queryKey: queryKeys.announcements(userId) });
+      if (Date.now() >= expiresAt) disconnect();
+      else if (!pusher) void connect();
       else if (["disconnected", "failed", "unavailable"].includes(pusher.connection.state)) pusher.connect();
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -126,11 +136,10 @@ export function RealtimeBridge() {
     return () => {
       stopped = true;
       window.clearTimeout(startupTimer);
-      window.clearTimeout(renewalTimer);
+      cancelExpiry?.();
       document.removeEventListener("visibilitychange", onVisible);
-      pusher?.disconnect();
-      setRealtimeStatus("offline");
+      disconnect();
     };
-  }, [client, token, user]);
+  }, [client, token, userId]);
   return null;
 }

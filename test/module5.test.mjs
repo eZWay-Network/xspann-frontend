@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { announcementSendStorageKey, displayedIncomingMessageId, mergeMessages, newestMessageId } from "../src/lib/messaging.ts";
-import { RealtimeHintTracker } from "../src/lib/realtime.ts";
+import { RealtimeHintTracker, scheduleRealtimeExpiry } from "../src/lib/realtime.ts";
 import { notificationDetails } from "../src/lib/notifications.ts";
 
 const message = (id, sender = 1) => ({ id, conversation_id: 9, sender_user_id: sender, client_message_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`, body: `message ${id}`, unavailable: false, created_at: "2026-11-05T00:00:00Z" });
@@ -26,6 +26,29 @@ test("Relay hints deduplicate opaque events and reject stale conversation versio
   assert.equal(tracker.accept("message.created", { event_id: "opaque-a", conversation_id: 4, version: 8 }), false);
   assert.equal(tracker.accept("conversation.updated", { event_id: "opaque-b", conversation_id: 4, version: 7 }), false);
   assert.equal(tracker.accept("conversation.updated", { event_id: "opaque-c", conversation_id: 4, version: 9 }), true);
+});
+
+test("a 30-day Relay session expires once at its login deadline", (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
+  const lifetime = 30 * 24 * 60 * 60 * 1000;
+  const maxDelay = 2_147_483_647;
+  let expired = 0;
+  scheduleRealtimeExpiry(lifetime, () => expired++);
+  t.mock.timers.tick(maxDelay);
+  assert.equal(expired, 0);
+  t.mock.timers.tick(lifetime - maxDelay - 1);
+  assert.equal(expired, 0);
+  t.mock.timers.tick(1);
+  assert.equal(expired, 1);
+});
+
+test("rotating the login token cancels the old Relay expiry", (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
+  let expired = false;
+  const cancel = scheduleRealtimeExpiry(500, () => { expired = true; });
+  cancel();
+  t.mock.timers.tick(500);
+  assert.equal(expired, false);
 });
 
 test("announcement and paused-release activity open their distinct destinations", () => {

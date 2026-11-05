@@ -31,6 +31,25 @@ export class RealtimeHintTracker {
   }
 }
 
+// Browser timers accept at most a signed 32-bit delay (about 24.8 days).
+const MAX_TIMER_DELAY = 2_147_483_647;
+
+export function scheduleRealtimeExpiry(expiresAt: number, onExpire: () => void) {
+  let timer: ReturnType<typeof setTimeout>;
+
+  function checkExpiry() {
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      onExpire();
+      return;
+    }
+    timer = setTimeout(checkExpiry, Math.min(remaining, MAX_TIMER_DELAY));
+  }
+
+  checkExpiry();
+  return () => clearTimeout(timer);
+}
+
 export const REALTIME_HINT_EVENT = "xpn-realtime-hint";
 
 export type RealtimeStatus = "connecting" | "ready" | "offline";
