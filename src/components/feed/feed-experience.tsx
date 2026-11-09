@@ -7,12 +7,15 @@ import { ActionRail } from "@/components/video/action-rail";
 import { VideoOptions } from "@/components/video/video-options";
 import { cx } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
+import { saveAudio, unsaveAudio } from "@/services/audio";
 import { getFollowingFeedVideos, getFeedVideos, getVideo, recordVideoView } from "@/services/videos";
 import type { PaginatedResponse, Video } from "@/types/api";
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import {
+  Bookmark,
   ChevronDown,
   ChevronUp,
+  LoaderCircle,
   Music,
   MapPin,
   Search,
@@ -23,7 +26,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -42,6 +45,7 @@ const emptyVideos: Video[] = [];
 export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) {
   const { loading: authLoading, token, user } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const feedTab = searchParams.get("tab");
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -51,6 +55,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const [commentCountsByVideoId, setCommentCountsByVideoId] = useState<Record<number, number>>({});
   const [followingByUserId, setFollowingByUserId] = useState<Record<number, boolean>>({});
   const [savedByVideoId, setSavedByVideoId] = useState<Record<number, { saved: boolean; savesCount: number }>>({});
+  const [savedByAudioId, setSavedByAudioId] = useState<Record<number, boolean>>({});
   const [blockedCreatorIds, setBlockedCreatorIds] = useState<Set<number>>(() => new Set());
   const feedRef = useRef<HTMLElement>(null);
   const viewedVideoIdsRef = useRef<Set<number>>(new Set());
@@ -185,6 +190,10 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
     setSavedByVideoId((current) => ({ ...current, [videoId]: { saved, savesCount } }));
   }, []);
 
+  const updateAudioSaveState = useCallback((audioId: number, saved: boolean) => {
+    setSavedByAudioId((current) => ({ ...current, [audioId]: saved }));
+  }, []);
+
   const hideBlockedCreator = useCallback((userId: number) => {
     setBlockedCreatorIds((current) => {
       const next = new Set(current);
@@ -296,7 +305,9 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
 
                   <VideoOptions
                     video={video}
+                    audioSaved={savedByAudioId[video.audio?.id ?? video.audio_id ?? 0] ?? video.audio?.viewer.saved ?? false}
                     onSaveChange={updateVideoSaveState}
+                    onAudioSaveChange={updateAudioSaveState}
                     onCreatorBlocked={hideBlockedCreator}
                   />
 
@@ -319,13 +330,15 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                         .map((tag) => `#${tag.replace("#", "")}`)
                         .join(" ")}
                     </p>
-                    {video.audio ? (
-                      <Link href={`/sounds/${video.audio.id}`} className="mt-2.5 flex w-fit max-w-full items-center gap-2 text-xs text-white/75 transition hover:text-white">
-                        <Music size={13} className="shrink-0" /> <span className="truncate">{video.audio.title}</span>
-                      </Link>
-                    ) : (
-                      <div className="mt-2.5 flex items-center gap-2 text-xs text-white/75"><Music size={13} className="shrink-0" /> <span>Original sound</span></div>
-                    )}
+                    <FeedSoundRow
+                      audioId={video.audio?.id ?? video.audio_id ?? null}
+                      title={video.audio?.title ?? "Original sound"}
+                      saved={savedByAudioId[video.audio?.id ?? video.audio_id ?? 0] ?? video.audio?.viewer.saved ?? false}
+                      token={token}
+                      userId={user?.id}
+                      onSavedChange={updateAudioSaveState}
+                      onSignIn={() => router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`)}
+                    />
                   </div>
                 </div>
 
@@ -380,6 +393,98 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
           onCommentCountChange={updateCommentCount}
         />
       )}
+    </div>
+  );
+}
+
+function FeedSoundRow({
+  audioId,
+  title,
+  saved,
+  token,
+  userId,
+  onSavedChange,
+  onSignIn,
+}: {
+  audioId: number | null;
+  title: string;
+  saved: boolean;
+  token: string | null;
+  userId?: number;
+  onSavedChange: (audioId: number, saved: boolean) => void;
+  onSignIn: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function toggleSaved() {
+    if (!audioId) return;
+    if (!token) {
+      onSignIn();
+      return;
+    }
+
+    const wasSaved = saved;
+    setSaving(true);
+    setError("");
+    onSavedChange(audioId, !wasSaved);
+
+    try {
+      const response = wasSaved
+        ? await unsaveAudio(audioId, token)
+        : await saveAudio(audioId, token);
+      onSavedChange(audioId, response.data.saved);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["audio", audioId] }),
+        queryClient.invalidateQueries({ queryKey: ["saved-audios", userId] }),
+      ]);
+    } catch {
+      onSavedChange(audioId, wasSaved);
+      setError(wasSaved ? "Could not remove saved sound." : "Could not save sound.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2.5 max-w-full">
+      <div className="flex max-w-full items-center gap-2">
+        {audioId ? (
+          <Link
+            href={`/sounds/${audioId}`}
+            className="flex min-w-0 items-center gap-2 rounded-full bg-black/25 px-2.5 py-1.5 text-xs text-white/85 backdrop-blur-sm transition hover:bg-black/40 hover:text-white"
+          >
+            <Music size={13} className="shrink-0" />
+            <span className="truncate">{title}</span>
+          </Link>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/25 px-2.5 py-1.5 text-xs text-white/75 backdrop-blur-sm">
+            <Music size={13} className="shrink-0" />
+            <span className="truncate">{title}</span>
+          </div>
+        )}
+        <button
+          type="button"
+          disabled={saving || !audioId}
+          onClick={() => void toggleSaved()}
+          aria-label={!audioId ? "This sound is unavailable to save" : saved ? `Remove ${title} from saved sounds` : `Save ${title}`}
+          aria-pressed={audioId ? saved : undefined}
+          title={!audioId ? "This video has no reusable sound record" : saved ? "Remove saved sound" : "Save sound"}
+          className={cx(
+            "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold backdrop-blur-sm transition disabled:opacity-65",
+            saved
+              ? "border-violet-300/70 bg-violet-500/85 text-white"
+              : "border-white/25 bg-black/25 text-white/90 hover:bg-black/45",
+          )}
+        >
+          {saving
+            ? <LoaderCircle size={12} className="animate-spin" />
+            : <Bookmark size={12} fill={saved ? "currentColor" : "none"} />}
+          <span>{saved ? "Saved" : "Save sound"}</span>
+        </button>
+      </div>
+      {error && <p role="alert" className="mt-1 text-[11px] font-medium text-rose-200">{error}</p>}
     </div>
   );
 }

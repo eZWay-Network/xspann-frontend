@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { compactNumber, cx } from "@/lib/format";
 import { ApiError } from "@/services/api";
+import { saveAudio, unsaveAudio } from "@/services/audio";
 import { saveVideo, unsaveVideo } from "@/services/saves";
 import { blockUser, reportVideo } from "@/services/safety";
 import type { Video } from "@/types/api";
@@ -47,11 +48,13 @@ const VIDEO_REPORT_REASONS = [
 
 type VideoOptionsProps = {
   video: Video;
+  audioSaved: boolean;
   onSaveChange: (videoId: number, saved: boolean, savesCount: number) => void;
+  onAudioSaveChange: (audioId: number, saved: boolean) => void;
   onCreatorBlocked: (userId: number) => void;
 };
 
-export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOptionsProps) {
+export function VideoOptions({ video, audioSaved, onSaveChange, onAudioSaveChange, onCreatorBlocked }: VideoOptionsProps) {
   const { authenticated, token, user } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
@@ -66,7 +69,7 @@ export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOpt
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [reason, setReason] = useState<(typeof VIDEO_REPORT_REASONS)[number]>(VIDEO_REPORT_REASONS[0]);
   const [details, setDetails] = useState("");
-  const [submitting, setSubmitting] = useState<"save" | "report" | "block" | null>(null);
+  const [submitting, setSubmitting] = useState<"save" | "sound" | "report" | "block" | null>(null);
   const [error, setError] = useState("");
 
   const mutedClass = isDark ? "text-violet-100/55" : "text-zinc-500";
@@ -145,6 +148,32 @@ export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOpt
     }
   }
 
+  async function toggleSoundSave() {
+    const audioId = video.audio?.id ?? video.audio_id ?? null;
+    if (!audioId) return;
+    if (!requireAuthentication() || !token) return;
+
+    const wasSaved = audioSaved;
+    setSubmitting("sound");
+    setError("");
+    onAudioSaveChange(audioId, !wasSaved);
+
+    try {
+      const response = wasSaved ? await unsaveAudio(audioId, token) : await saveAudio(audioId, token);
+      onAudioSaveChange(audioId, response.data.saved);
+      setMenuOpen(false);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["audio", audioId] }),
+        queryClient.invalidateQueries({ queryKey: ["saved-audios", user?.id] }),
+      ]);
+    } catch (caughtError) {
+      onAudioSaveChange(audioId, wasSaved);
+      setError(caughtError instanceof ApiError ? caughtError.message : "Could not update this saved sound.");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
   async function submitReport(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) return;
@@ -209,6 +238,12 @@ export function VideoOptions({ video, onSaveChange, onCreatorBlocked }: VideoOpt
               label={video.viewer.saved ? "Remove from saved" : "Save video"}
               onClick={() => void toggleSave()}
               disabled={submitting === "save"}
+            />
+            <VideoMenuItem
+              icon={submitting === "sound" ? <LoaderCircle className="animate-spin" size={18} /> : <Music size={18} />}
+              label={audioSaved ? "Remove saved sound" : "Save sound"}
+              onClick={() => void toggleSoundSave()}
+              disabled={submitting === "sound" || !(video.audio?.id ?? video.audio_id)}
             />
             {!isOwnVideo && (
               <>
