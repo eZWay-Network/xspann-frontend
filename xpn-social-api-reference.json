@@ -10683,12 +10683,18 @@
       {
         "group": "Messaging and preferences",
         "title": "Your conversations",
-        "description": "Participant inbox ordered by immutable created_at and id descending. Default 20/max 50; URL-encode next_cursor. Includes current per-conversation and total unread message counts. Reading does not mark messages read.",
+        "description": "Participant inbox ordered by latest message time (opening time for an empty thread), then conversation ID descending. Recipient contains the visible peer’s id, name, username and avatar. It is null when their profile is unavailable. Default 20/max 50; URL-encode next_cursor. Includes current per-conversation and total unread message counts. Reading does not mark messages read.",
         "response": {
           "data": [
             {
               "id": 1,
               "recipient_user_id": 2,
+              "recipient": {
+                "id": 2,
+                "name": "River",
+                "username": "river",
+                "avatar": null
+              },
               "version": 2,
               "can_send": true,
               "last_read_message_id": 0,
@@ -10757,6 +10763,12 @@
           "data": {
             "id": 1,
             "recipient_user_id": 2,
+            "recipient": {
+              "id": 2,
+              "name": "River",
+              "username": "river",
+              "avatar": null
+            },
             "version": 2,
             "can_send": true,
             "last_read_message_id": 0,
@@ -10814,6 +10826,12 @@
           "data": {
             "id": 1,
             "recipient_user_id": 2,
+            "recipient": {
+              "id": 2,
+              "name": "River",
+              "username": "river",
+              "avatar": null
+            },
             "version": 2,
             "can_send": true,
             "last_read_message_id": 0,
@@ -11008,6 +11026,12 @@
           "data": {
             "id": 1,
             "recipient_user_id": 2,
+            "recipient": {
+              "id": 2,
+              "name": "River",
+              "username": "river",
+              "avatar": null
+            },
             "version": 2,
             "can_send": true,
             "last_read_message_id": 0,
@@ -11073,6 +11097,12 @@
           "data": {
             "id": 1,
             "recipient_user_id": 2,
+            "recipient": {
+              "id": 2,
+              "name": "River",
+              "username": "river",
+              "avatar": null
+            },
             "version": 2,
             "can_send": true,
             "last_read_message_id": 0,

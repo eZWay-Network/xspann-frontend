@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bell, MessageCircle, Search } from "lucide-react";
+import { UserAvatar } from "@/components/common/user-avatar";
+import { shortRelativeTime } from "@/lib/format";
+import { recipientName } from "@/lib/messaging";
 import { useState } from "react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
@@ -27,18 +30,50 @@ export function InboxPage() {
     getNextPageParam: (lastPage) => lastPage.meta.next_cursor ?? undefined,
     refetchInterval: realtimeStatus === "ready" ? 75_000 : 20_000,
   });
-  const search = query.trim().toLowerCase();
-  const conversations = (inbox.data?.pages.flatMap((page) => page.data) ?? []).filter((item) => !search || item.last_message?.body?.toLowerCase().includes(search) || String(item.recipient_user_id).includes(search));
+  const search = query.trim().toLocaleLowerCase();
+  const threads = inbox.data?.pages.flatMap((page) => page.data) ?? [];
+  const conversations = threads.filter((item) => !search || [
+    item.recipient?.name,
+    item.recipient && `@${item.recipient.username}`,
+    item.last_message?.body,
+  ].some((value) => value?.toLocaleLowerCase().includes(search)));
   const updates = (announcements.data?.pages.flatMap((page) => page.data) ?? []).filter((item) => !search || item.title.toLowerCase().includes(search) || item.body.toLowerCase().includes(search));
 
   return <section className="page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"><div className="mx-auto max-w-3xl">
-    <div className="flex items-end justify-between gap-4"><div><p className="text-sm font-semibold text-[var(--royal)]">Messages</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Inbox</h1><p className="mt-2 text-sm text-[var(--muted)]">Conversations and artist updates remain separate, with independent read state.</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${realtimeStatus === "ready" ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-300"}`}>{realtimeStatus === "ready" ? "Live" : realtimeStatus === "connecting" ? "Connecting…" : "REST fallback"}</span></div>
-    <label className="mt-7 flex h-11 items-center gap-3 rounded-xl bg-[var(--surface)] px-4"><Search size={17} className="text-[var(--muted)]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded messages and updates" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
-    <InboxSection title="Conversations" icon={MessageCircle} pending={inbox.isPending} error={inbox.isError} empty="Open a mutual connection’s profile to start a message." hasItems={conversations.length > 0 || Boolean(inbox.hasNextPage)}>
-      {conversations.map((conversation) => <Link key={conversation.id} href={`/inbox/${conversation.id}`} className="flex gap-4 border-b border-[var(--line)] p-4 transition last:border-0 hover:bg-[var(--surface)]"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-violet-500/10 font-bold text-[var(--royal)]">{String(conversation.recipient_user_id).slice(-2)}</span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate font-semibold">Account {conversation.recipient_user_id}</p><time className="shrink-0 text-[11px] text-[var(--muted)]">{conversation.last_message ? new Date(conversation.last_message.created_at).toLocaleDateString() : ""}</time></div><div className="mt-1 flex items-center gap-2"><p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{conversation.last_message?.unavailable ? "Message unavailable" : conversation.last_message?.body ?? "Start the conversation"}</p>{conversation.muted && <span className="text-[10px] text-[var(--muted)]">Muted</span>}{conversation.unread_count > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unread_count}</span>}</div></div></Link>)}
+    <div className="flex items-center justify-between gap-4">
+      <h1 className="text-3xl font-semibold tracking-tight">Inbox</h1>
+      {realtimeStatus !== "ready" && <span className="text-xs text-[var(--muted)]" role="status">{realtimeStatus === "connecting" ? "Connecting…" : "Reconnecting…"}</span>}
+    </div>
+    <label className="mt-6 flex h-11 items-center gap-3 rounded-xl bg-[var(--surface)] px-4">
+      <Search size={17} aria-hidden className="text-[var(--muted)]" />
+      <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" aria-label="Search loaded conversations and updates" placeholder="Search names, messages and updates" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+    </label>
+    <InboxSection title="Conversations" icon={MessageCircle} pending={inbox.isPending} error={inbox.isError} empty={search ? "No matching conversations." : "Open a mutual connection’s profile to start a message."} hasItems={conversations.length > 0 || Boolean(inbox.hasNextPage)}>
+      {conversations.map((thread) => {
+        const person = thread.recipient;
+        const label = recipientName(person);
+        const message = thread.last_message;
+        const preview = message?.unavailable ? "Message unavailable" : message?.body
+          ? `${message.sender_user_id === user?.id ? "You: " : ""}${message.body}` : "Start the conversation";
+        const timestamp = message?.created_at ?? thread.created_at;
+        return <Link key={thread.id} href={`/inbox/${thread.id}`} className="flex items-center gap-3.5 border-b border-[var(--line)] px-4 py-3.5 last:border-0 hover:bg-[var(--surface)] focus-visible:outline-offset-[-2px]">
+          <UserAvatar src={person?.avatar} name={person?.name || person?.username} size={48} className="h-12 w-12" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-3">
+              <span className={`min-w-0 flex-1 truncate ${thread.unread_count ? "font-bold" : "font-medium"}`}>{label}</span>
+              <time dateTime={timestamp} title={new Date(timestamp).toLocaleString()} className="shrink-0 text-xs text-[var(--muted)]">{shortRelativeTime(timestamp)}</time>
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <span className={`min-w-0 flex-1 truncate text-sm ${thread.unread_count ? "font-medium" : "text-[var(--muted)]"}`}>{preview}</span>
+              {thread.muted && <span className="text-xs text-[var(--muted)]">Muted</span>}
+              {thread.unread_count > 0 && <span aria-label={`${thread.unread_count} unread messages`} className="rounded-full bg-violet-600 px-2 py-0.5 text-xs font-bold text-white">{thread.unread_count}</span>}
+            </div>
+          </div>
+        </Link>;
+      })}
       {inbox.hasNextPage && <LoadMore pending={inbox.isFetchingNextPage} onClick={() => void inbox.fetchNextPage()} />}
     </InboxSection>
-    <InboxSection title="Artist updates" icon={Bell} pending={announcements.isPending} error={announcements.isError} empty="Updates you explicitly subscribe to will appear here." hasItems={updates.length > 0 || Boolean(announcements.hasNextPage)}>
+    <InboxSection title="Artist updates" icon={Bell} pending={announcements.isPending} error={announcements.isError} empty={search ? "No matching updates." : "Artist updates you subscribe to will appear here."} hasItems={updates.length > 0 || Boolean(announcements.hasNextPage)}>
       {updates.map((announcement) => <Link key={announcement.id} href={`/announcements/${announcement.id}`} className={`block border-b border-[var(--line)] p-4 transition last:border-0 hover:bg-[var(--surface)] ${announcement.read_at ? "" : "bg-violet-500/[0.05]"}`}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="truncate font-semibold">{announcement.title}</p><p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">{announcement.body}</p></div>{!announcement.read_at && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--pink-signal)]" />}</div><time className="mt-2 block text-xs text-[var(--muted)]">{new Date(announcement.delivered_at ?? announcement.created_at).toLocaleString()}</time></Link>)}
       {announcements.hasNextPage && <LoadMore pending={announcements.isFetchingNextPage} onClick={() => void announcements.fetchNextPage()} />}
     </InboxSection>

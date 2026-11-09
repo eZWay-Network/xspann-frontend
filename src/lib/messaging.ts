@@ -1,4 +1,8 @@
-import type { ConversationMessage, MessagePage } from "@/types/api";
+import type { Conversation, ConversationMessage, MessagePage } from "@/types/api";
+
+export function recipientName(person: Conversation["recipient"]): string {
+  return person?.name?.trim() || (person?.username ? `@${person.username}` : "Unavailable account");
+}
 
 export function mergeMessages(...groups: Array<ConversationMessage[] | undefined>) {
   const byId = new Map<number, ConversationMessage>();
