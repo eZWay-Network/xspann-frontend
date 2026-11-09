@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CalendarClock, CheckCircle2, ExternalLink, GripVertical, ListMusic, LoaderCircle, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
+import { BarChart3, CalendarClock, Camera, CheckCircle2, ExternalLink, FolderPlus, Globe2, GripVertical, Link2, ListMusic, LoaderCircle, Lock, MapPin, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnnouncementsPanel } from "@/components/studio/announcements-panel";
 import { PromotionsPanel } from "@/components/studio/promotions-panel";
 import { ReleasesPanel } from "@/components/studio/releases-panel";
@@ -120,7 +121,140 @@ function ProfileEditor({ artist, token, userId, capabilities, onCreated }: { art
     }
     mutation.mutate();
   }
-  return <div className={artist ? "" : "page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"}><div className="mx-auto max-w-3xl rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6 sm:p-8"><p className="text-sm font-semibold text-[var(--royal)]">{artist ? "Public identity" : "Artist enrollment"}</p><h1 className="mt-1 text-2xl font-semibold">{artist ? "Edit artist profile" : "Create your artist profile"}</h1><p className="mt-2 text-sm text-[var(--muted)]">{artist ? "Keep your directory information current. Saved paid values stay here after a downgrade even when the public page no longer presents them." : "Choose your public identity. Creating an artist profile is free and keeps your existing account, followers and videos."}</p><form onSubmit={submit} className="mt-7 space-y-5"><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Stage name"><input required maxLength={120} value={draft.stage_name} onChange={(event) => setDraft({ ...draft, stage_name: event.target.value })} className="studio-input" />{fieldErrors.stage_name?.[0] && <FieldError message={fieldErrors.stage_name[0]} />}</StudioField><StudioField label="Public slug"><input required minLength={3} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeArtistSlug(event.target.value) })} className="studio-input" /><p className="mt-1 text-xs text-[var(--muted)]">Your shareable page will be /artists/{draft.slug || "your-slug"}.</p>{fieldErrors.slug?.[0] && <FieldError message={fieldErrors.slug[0]} />}</StudioField></div><StudioField label="Bio"><textarea rows={5} maxLength={2000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} className="studio-input h-auto py-3" /></StudioField><div className="grid gap-4 sm:grid-cols-2"><StudioField label="Location"><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} className="studio-input" /></StudioField>{artist ? <StudioField label="Artist image"><div className="flex items-center gap-3">{imagePreview && <Image src={imagePreview} alt="" width={52} height={52} className="h-13 w-13 rounded-xl object-cover" />}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.target.files?.[0] && imageUpload.mutate(event.target.files[0])} className="studio-input py-2" /></div><p className="mt-1 text-xs text-[var(--muted)]">JPEG, PNG or WebP, up to 5 MiB.</p></StudioField> : <div className="rounded-xl bg-[var(--surface)] p-4 text-xs leading-5 text-[var(--muted)]">Save your artist profile first, then add its image and external links.</div>}</div><StudioField label="Genres (up to 5)"><div className="flex flex-wrap gap-2">{taxonomy.data?.data.genres.map((genre) => { const selected = draft.genre_ids.includes(genre.id); return <button type="button" key={genre.id} onClick={() => setDraft({ ...draft, genre_ids: selected ? draft.genre_ids.filter((id) => id !== genre.id) : draft.genre_ids.length < 5 ? [...draft.genre_ids, genre.id] : draft.genre_ids })} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${selected ? "bg-violet-600 text-white" : "bg-[var(--surface)] text-[var(--muted)]"}`}>{genre.name}</button>; })}</div></StudioField>{artist && <StudioField label={`Links (${links.length}/${capabilities.links})`}><div className="space-y-2">{linksOverLimit && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300"><span>These saved links are above the current plan limit. Unrelated profile edits preserve them; remove extras before changing links.</span><Link href="/pricing" className="font-bold underline">Update plan</Link></div>}{links.map((link, index) => <div key={index} className="grid gap-2 sm:grid-cols-[110px_110px_1fr_40px]"><input value={link.label} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))} placeholder="Label" className="studio-input" required /><select value={link.type} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as typeof link.type } : item))} className="studio-input">{taxonomy.data?.data.link_types.map((type) => <option key={type} value={type}>{type}</option>)}</select><input type="url" pattern="https://.*" value={link.url} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} placeholder="https://" className="studio-input" required /><button type="button" aria-label={`Remove ${link.label || "link"}`} onClick={() => setLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="icon-button"><Trash2 size={16} /></button></div>)}{links.length < capabilities.links && <button type="button" onClick={() => setLinks((current) => [...current, { label: "", type: "website", url: "https://" }])} className="text-sm font-bold text-[var(--royal)]">+ Add link</button>}</div></StudioField>}{artist && (capabilities.featured_release || draft.featured_video_id) && <StudioField label="Featured release"><select disabled={!capabilities.featured_release} value={draft.featured_video_id ?? 0} onChange={(event) => setDraft({ ...draft, featured_video_id: Number(event.target.value) || null })} className="studio-input"><option value={0}>No featured release</option>{ownedVideos.data?.data.filter((video) => video.status === "published" && video.visibility === "public" && video.moderation_status === "approved").map((video) => <option key={video.id} value={video.id}>{video.caption || `Video #${video.id}`}</option>)}</select>{!capabilities.featured_release && <p className="mt-1 text-xs text-amber-300">Your selection remains saved, but the current plan does not present it publicly. <Link href="/pricing" className="font-bold underline">Update plan</Link></p>}</StudioField>}<label className="flex items-center gap-3 rounded-xl bg-[var(--surface)] p-4 text-sm"><input type="checkbox" checked={draft.listed} onChange={(event) => setDraft({ ...draft, listed: event.target.checked })} className="accent-violet-600" /><span><b>Show in the artist directory</b><span className="mt-1 block text-xs text-[var(--muted)]">Your public slug remains shareable when this is off.</span></span></label>{status && <p role={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "alert" : "status"} className={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "text-sm text-pink-400" : "text-sm text-[var(--muted)]"}>{status}</p>}<button disabled={mutation.isPending || imageUpload.isPending} className="primary-button">{mutation.isPending && <LoaderCircle size={16} className="animate-spin" />}{artist ? "Save changes" : "Create artist profile"}</button>{!artist && <Link href="/feed" className="ml-3 text-sm font-bold text-[var(--muted)]">Continue to feed</Link>}</form></div></div>;
+  const profileName = draft.stage_name.trim() || (artist ? "Your artist profile" : "New artist");
+  const selectedGenreCount = draft.genre_ids.length;
+
+  return (
+    <div className={artist ? "" : "page-content modern-scrollbar h-full overflow-y-auto px-5 sm:px-8"}>
+      <form onSubmit={submit} className={artist ? "w-full space-y-5" : "mx-auto max-w-5xl space-y-5"}>
+        <section className="overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--panel)] shadow-sm">
+          <div className="h-28 bg-[radial-gradient(circle_at_20%_0%,rgba(139,92,246,.42),transparent_58%),linear-gradient(120deg,rgba(124,58,237,.12),rgba(244,63,94,.08),transparent)]" />
+          <div className="relative -mt-14 flex flex-col gap-5 px-5 pb-6 sm:flex-row sm:items-end sm:px-7">
+            {artist ? (
+              <label className="group relative block h-28 w-28 shrink-0 cursor-pointer" aria-label="Update artist image">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={imageUpload.isPending}
+                  onChange={(event) => event.target.files?.[0] && imageUpload.mutate(event.target.files[0])}
+                />
+                <span className="relative block h-full w-full overflow-hidden rounded-3xl border-4 border-[var(--panel)] bg-[var(--surface)] shadow-lg">
+                  {imagePreview ? (
+                    <Image src={imagePreview} alt={profileName} fill sizes="112px" className="object-cover transition duration-300 group-hover:scale-105" />
+                  ) : (
+                    <span className="grid h-full place-items-center bg-[linear-gradient(145deg,#7c3aed,#4c1d95)] text-white"><Music2 size={34} /></span>
+                  )}
+                  <span className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
+                </span>
+                <span className="absolute -bottom-1 -right-1 grid h-10 w-10 place-items-center rounded-full border-4 border-[var(--panel)] bg-violet-600 text-white shadow-md transition group-hover:bg-violet-500">
+                  {imageUpload.isPending ? <LoaderCircle size={17} className="animate-spin" /> : <Camera size={17} />}
+                </span>
+              </label>
+            ) : (
+              <span className="grid h-28 w-28 shrink-0 place-items-center rounded-3xl border-4 border-[var(--panel)] bg-[linear-gradient(145deg,#7c3aed,#4c1d95)] text-white shadow-lg"><Music2 size={34} /></span>
+            )}
+
+            <div className="min-w-0 flex-1 pb-1">
+              <p className="text-xs font-bold uppercase tracking-[.16em] text-[var(--royal)]">{artist ? "Public identity" : "Artist enrollment"}</p>
+              <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight sm:text-3xl">{profileName}</h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5"><Globe2 size={14} /> /artists/{draft.slug || "your-slug"}</span>
+                {draft.location && <span className="inline-flex items-center gap-1.5"><MapPin size={14} /> {draft.location}</span>}
+                <span className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${draft.listed ? "bg-emerald-400" : "bg-zinc-400"}`} />{draft.listed ? "Visible in directory" : "Unlisted"}</span>
+              </div>
+            </div>
+
+            {artist && <Link href={`/artists/${artist.slug}`} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--background)] px-4 text-sm font-semibold transition hover:bg-[var(--surface)]">Preview profile <ExternalLink size={15} /></Link>}
+          </div>
+          <div className="border-t border-[var(--line)] bg-[var(--surface)]/55 px-5 py-3 text-xs text-[var(--muted)] sm:px-7">
+            {artist ? "Click the artist image to replace it. Changes become public after you save the profile." : "Create the profile first, then add an artist image and external links."}
+          </div>
+        </section>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(290px,.75fr)]">
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-6">
+            <ProfileSectionHeading icon={Pencil} title="Profile details" description="The information fans see first on your artist page." />
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <StudioField label="Stage name">
+                <input required maxLength={120} value={draft.stage_name} onChange={(event) => setDraft({ ...draft, stage_name: event.target.value })} className="studio-input" />
+                {fieldErrors.stage_name?.[0] && <FieldError message={fieldErrors.stage_name[0]} />}
+              </StudioField>
+              <StudioField label="Public slug">
+                <div className="flex h-10 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] focus-within:border-[var(--royal)] focus-within:ring-2 focus-within:ring-violet-500/20">
+                  <span className="grid place-items-center border-r border-[var(--line)] px-3 text-xs text-[var(--muted)]">/artists/</span>
+                  <input required minLength={3} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeArtistSlug(event.target.value) })} className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none" />
+                </div>
+                {fieldErrors.slug?.[0] && <FieldError message={fieldErrors.slug[0]} />}
+              </StudioField>
+            </div>
+            <div className="mt-4">
+              <StudioField label="Bio">
+                <textarea rows={5} maxLength={2000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} placeholder="Tell listeners about your sound, story, and latest work." className="studio-input h-auto resize-y py-3 leading-6" />
+                <p className="mt-1 text-right text-[11px] text-[var(--muted)]">{draft.bio.length}/2000</p>
+              </StudioField>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-6">
+            <ProfileSectionHeading icon={Globe2} title="Discovery" description="Control how listeners find and feature you." />
+            <div className="mt-5 space-y-4">
+              <StudioField label="Location">
+                <div className="relative"><MapPin size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" /><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="City or region" className="studio-input pl-9" /></div>
+              </StudioField>
+              {artist && (capabilities.featured_release || draft.featured_video_id) && (
+                <StudioField label="Featured release">
+                  <select disabled={!capabilities.featured_release} value={draft.featured_video_id ?? 0} onChange={(event) => setDraft({ ...draft, featured_video_id: Number(event.target.value) || null })} className="studio-input">
+                    <option value={0}>No featured release</option>
+                    {ownedVideos.data?.data.filter((video) => video.status === "published" && video.visibility === "public" && video.moderation_status === "approved").map((video) => <option key={video.id} value={video.id}>{video.caption || `Video #${video.id}`}</option>)}
+                  </select>
+                  {!capabilities.featured_release && <p className="mt-2 text-xs text-amber-300">Your saved selection is retained but hidden on this plan. <Link href="/pricing" className="font-bold underline">Update plan</Link></p>}
+                </StudioField>
+              )}
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3.5">
+                <span><span className="block text-sm font-semibold">Artist directory</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Your public link works even when discovery is off.</span></span>
+                <input type="checkbox" checked={draft.listed} onChange={(event) => setDraft({ ...draft, listed: event.target.checked })} className="sr-only" />
+                <span aria-hidden="true" className={`relative h-6 w-11 shrink-0 rounded-full transition ${draft.listed ? "bg-violet-600" : "bg-zinc-400/45"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${draft.listed ? "left-6" : "left-1"}`} /></span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3"><ProfileSectionHeading icon={Music2} title="Genres" description="Choose up to five styles that best describe your music." /><span className="rounded-full bg-violet-500/10 px-3 py-1 text-xs font-bold text-[var(--royal)]">{selectedGenreCount}/5 selected</span></div>
+          <div className="mt-5 flex flex-wrap gap-2">{taxonomy.data?.data.genres.map((genre) => { const selected = draft.genre_ids.includes(genre.id); const atLimit = !selected && selectedGenreCount >= 5; return <button type="button" key={genre.id} disabled={atLimit} aria-pressed={selected} onClick={() => setDraft({ ...draft, genre_ids: selected ? draft.genre_ids.filter((id) => id !== genre.id) : [...draft.genre_ids, genre.id] })} className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${selected ? "border-violet-500 bg-violet-600 text-white shadow-sm" : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:border-violet-400 hover:text-[var(--foreground)]"}`}>{selected && <CheckCircle2 size={13} className="mr-1.5 inline" />}{genre.name}</button>; })}</div>
+        </section>
+
+        {artist && (
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3"><ProfileSectionHeading icon={Link2} title="Links" description="Connect fans to your music and official channels." /><span className="text-xs font-semibold text-[var(--muted)]">{links.length}/{capabilities.links}</span></div>
+            {linksOverLimit && <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300"><span>These saved links exceed your current plan limit. Remove extras before editing links.</span><Link href="/pricing" className="font-bold underline">Update plan</Link></div>}
+            <div className="mt-4 space-y-3">
+              {links.map((link, index) => (
+                <div key={index} className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:grid-cols-[120px_130px_1fr_40px]">
+                  <input value={link.label} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))} placeholder="Label" className="studio-input bg-[var(--panel)]" required />
+                  <select value={link.type} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as typeof link.type } : item))} className="studio-input bg-[var(--panel)]">{taxonomy.data?.data.link_types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                  <input type="url" pattern="https://.*" value={link.url} onChange={(event) => setLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} placeholder="https://" className="studio-input bg-[var(--panel)]" required />
+                  <button type="button" aria-label={`Remove ${link.label || "link"}`} onClick={() => setLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="icon-button text-pink-400"><Trash2 size={16} /></button>
+                </div>
+              ))}
+              {!links.length && <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">No links added yet.</p>}
+            </div>
+            {links.length < capabilities.links && <button type="button" onClick={() => setLinks((current) => [...current, { label: "", type: "website", url: "https://" }])} className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[var(--royal)]"><Plus size={15} /> Add link</button>}
+          </section>
+        )}
+
+        <div className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">{status ? <p role={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "alert" : "status"} className={mutation.isError || imageUpload.isError || (linksDirty && linksOverLimit) ? "text-sm text-pink-400" : "text-sm text-emerald-400"}>{status}</p> : <p className="text-sm text-[var(--muted)]">Review your profile, then publish the latest changes.</p>}</div>
+          <div className="flex shrink-0 items-center gap-3">{!artist && <Link href="/feed" className="text-sm font-bold text-[var(--muted)]">Continue to feed</Link>}<button disabled={mutation.isPending || imageUpload.isPending} className="primary-button min-w-36">{mutation.isPending && <LoaderCircle size={16} className="animate-spin" />}{artist ? "Save profile" : "Create profile"}</button></div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ProfileSectionHeading({ icon: Icon, title, description }: { icon: React.ComponentType<{ size?: number }>; title: string; description: string }) {
+  return <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-[var(--royal)]"><Icon size={17} /></span><span><span className="block font-semibold">{title}</span><span className="mt-0.5 block text-xs leading-5 text-[var(--muted)]">{description}</span></span></div>;
 }
 
 function ArtistCreated({ artist, onOpenWorkspace }: { artist: Artist; onOpenWorkspace: () => void }) {
@@ -134,12 +268,18 @@ function PlaylistsPanel({ token, userId, limit, reportedUsage }: { token: string
   const playlistCount = Math.max(reportedUsage ?? 0, query.data?.meta.total ?? query.data?.data.length ?? 0);
   const limitReached = !query.isPending && playlistCount >= limit;
   const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const create = useMutation({
-    mutationFn: () => createPlaylist({ title, category: taxonomy.data?.data.playlist_categories[0] ?? "release", visibility: "public" }, token),
+    mutationFn: () => createPlaylist({ title, category: category || taxonomy.data?.data.playlist_categories[0] || "release", visibility }, token),
     onSuccess: (response) => {
       setTitle("");
+      setCategory("");
+      setVisibility("public");
+      setCreateOpen(false);
       setSelectedId(response.data.id);
       void client.invalidateQueries({ queryKey: ["my-playlists", userId] });
     },
@@ -161,56 +301,83 @@ function PlaylistsPanel({ token, userId, limit, reportedUsage }: { token: string
     }
   }
 
-  return <Panel title="Playlists" helper={`Organize releases for fans. Your current plan allows ${limit}.`}>
-    {limitReached ? (
-      <div role="status" className="mb-5 flex flex-col gap-4 rounded-2xl border border-violet-500/25 bg-[linear-gradient(110deg,#7c3aed14,var(--surface))] p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-500/15 text-[var(--royal)]"><Rocket size={18} /></span>
-          <div><p className="font-semibold">Playlist limit reached</p><p className="mt-1 text-sm leading-5 text-[var(--muted)]">You’re using {playlistCount} of {limit} available {limit === 1 ? "playlist" : "playlists"}. Upgrade your artist plan to create more.</p></div>
+  const usagePercent = limit > 0 ? Math.min(100, playlistCount / limit * 100) : 0;
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--panel)]">
+      <div className="flex flex-col gap-5 border-b border-[var(--line)] bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,.16),transparent_48%)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-600 text-white shadow-[0_10px_24px_rgba(124,58,237,.24)]"><ListMusic size={23} /></span>
+          <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[var(--royal)]">Your catalog</p><h2 className="mt-1 text-2xl font-semibold">Playlists</h2><p className="mt-1 text-sm text-[var(--muted)]">Curate releases into collections your fans can explore.</p></div>
         </div>
-        <Link href="/pricing" className="primary-button shrink-0">Upgrade plan <ExternalLink size={14} /></Link>
+        {limitReached ? <Link href="/pricing" className="primary-button shrink-0">Upgrade plan <ExternalLink size={14} /></Link> : <button type="button" disabled={query.isPending} onClick={() => { setError(""); setCreateOpen(true); }} className="primary-button shrink-0"><Plus size={16} /> New playlist</button>}
       </div>
-    ) : (
-      <form onSubmit={(event) => { event.preventDefault(); setError(""); create.mutate(); }} className="mb-5 flex gap-2"><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Playlist title" required maxLength={120} className="studio-input" /><button disabled={create.isPending || query.isPending} className="primary-button"><Plus size={16} /> Create</button></form>
-    )}
-    {error && <InlineError message={error} />}
-    <div className="grid gap-4 sm:grid-cols-2">{query.data?.data.map((playlist) => <PlaylistSummaryCard key={playlist.id} playlist={playlist} selected={selectedId === playlist.id} onEdit={() => setSelectedId(selectedId === playlist.id ? null : playlist.id)} onDelete={() => void remove(playlist)} />)}</div>
-    {!query.isPending && !query.data?.data.length && <Empty icon={ListMusic} title="No playlists" text="Create a collection for your releases, live clips or behind-the-scenes posts." />}
-    {selectedId && <PlaylistEditor key={selectedId} id={selectedId} token={token} userId={userId} categories={taxonomy.data?.data.playlist_categories ?? []} genres={taxonomy.data?.data.genres ?? []} onClose={() => setSelectedId(null)} />}
-  </Panel>;
+
+      <div className="p-5 sm:p-7">
+        <div className="mb-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div>
+            <div className="flex items-center justify-between gap-3 text-xs"><span className="font-semibold">Playlist usage</span><span className="text-[var(--muted)]">{playlistCount} of {limit}</span></div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--surface)]"><span className={`block h-full rounded-full ${limitReached ? "bg-amber-400" : "bg-violet-600"}`} style={{ width: `${usagePercent}%` }} /></div>
+          </div>
+          <span className="justify-self-start rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] sm:justify-self-end">{Math.max(0, limit - playlistCount)} available</span>
+        </div>
+
+        {limitReached && <div role="status" className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><Rocket size={18} className="mt-0.5 shrink-0 text-amber-400" /><div><p className="font-semibold text-amber-300">Playlist limit reached</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">Your existing playlists remain available. Upgrade your plan or remove one before creating another.</p></div></div>}
+        {error && <InlineError message={error} />}
+        {query.isPending && <div className="grid min-h-52 place-items-center"><XpnLoader compact label="Loading playlists…" /></div>}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{query.data?.data.map((playlist) => <PlaylistSummaryCard key={playlist.id} playlist={playlist} selected={selectedId === playlist.id} onEdit={() => setSelectedId(selectedId === playlist.id ? null : playlist.id)} onDelete={() => void remove(playlist)} />)}</div>
+        {!query.isPending && !query.data?.data.length && <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/45 py-14 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-500/10 text-[var(--royal)]"><FolderPlus size={26} /></span><h3 className="mt-4 font-semibold">Create your first playlist</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">Group releases, live sessions, or behind-the-scenes videos into a collection.</p>{!limitReached && <button type="button" onClick={() => setCreateOpen(true)} className="primary-button mt-5"><Plus size={16} /> New playlist</button>}</div>}
+        {selectedId && <PlaylistEditor key={selectedId} id={selectedId} token={token} userId={userId} categories={taxonomy.data?.data.playlist_categories ?? []} genres={taxonomy.data?.data.genres ?? []} onClose={() => setSelectedId(null)} />}
+      </div>
+
+      <Dialog open={createOpen} onOpenChange={(open) => { if (!create.isPending) setCreateOpen(open); }}>
+        <DialogContent className="max-w-lg p-0">
+          <form onSubmit={(event) => { event.preventDefault(); setError(""); create.mutate(); }}>
+            <DialogHeader className="border-b border-[var(--line)] px-6 py-5 pr-16">
+              <DialogTitle>Create a playlist</DialogTitle>
+              <DialogDescription>Start with the basics. You can add and reorder releases next.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 px-6 py-5">
+              <StudioField label="Playlist title"><input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Live from Dhaka" required maxLength={120} className="studio-input" /></StudioField>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StudioField label="Category"><select value={category || taxonomy.data?.data.playlist_categories[0] || "release"} onChange={(event) => setCategory(event.target.value)} className="studio-input">{(taxonomy.data?.data.playlist_categories ?? ["release"]).map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></StudioField>
+                <StudioField label="Visibility"><select value={visibility} onChange={(event) => setVisibility(event.target.value as "public" | "private")} className="studio-input"><option value="public">Public</option><option value="private">Private</option></select></StudioField>
+              </div>
+              {error && <InlineError message={error} />}
+            </div>
+            <DialogFooter className="border-t border-[var(--line)] px-6 py-4"><button type="button" disabled={create.isPending} onClick={() => setCreateOpen(false)} className="h-10 rounded-xl border border-[var(--line)] px-4 text-sm font-semibold">Cancel</button><button disabled={create.isPending || !title.trim()} className="primary-button">{create.isPending && <LoaderCircle size={15} className="animate-spin" />} Create playlist</button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
 }
 
 function PlaylistSummaryCard({ playlist, selected, onEdit, onDelete }: { playlist: ArtistPlaylist; selected: boolean; onEdit: () => void; onDelete: () => void }) {
   const category = playlist.category.replaceAll("_", " ");
   return (
-    <article className={`group relative overflow-hidden rounded-2xl border bg-[var(--surface)] transition ${selected ? "border-violet-400 shadow-[0_10px_30px_rgba(124,58,237,0.12)] ring-2 ring-violet-400/15" : "border-[var(--line)] hover:border-violet-400/55 hover:shadow-sm"}`}>
-      <button type="button" onClick={onEdit} aria-pressed={selected} className="flex w-full min-w-0 items-center gap-4 p-3 pr-24 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400">
-        <span className="relative block h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-900">
+    <article className={`group relative min-w-0 rounded-xl p-2.5 transition ${selected ? "bg-violet-500/10 ring-2 ring-violet-400/45" : "hover:bg-[var(--surface)]"}`}>
+      <button type="button" onClick={onEdit} aria-pressed={selected} aria-label={`${selected ? "Close" : "Edit"} ${playlist.title}`} className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
+        <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-zinc-900 shadow-md">
           {playlist.cover_url ? (
-            <Image src={playlist.cover_url} alt="" fill sizes="80px" className="object-cover transition duration-300 group-hover:scale-[1.04]" />
+            <Image src={playlist.cover_url} alt="" fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw" className="object-cover transition duration-500 group-hover:scale-[1.04]" />
           ) : (
             <span className="absolute inset-0 grid place-items-center overflow-hidden bg-[linear-gradient(145deg,#7c3aed,#4c1d95_58%,#18181b)] text-white">
-              <span className="absolute -right-5 -top-5 h-16 w-16 rounded-full border border-white/20" />
-              <span className="absolute -bottom-5 -left-5 h-20 w-20 rounded-full bg-white/10" />
-              <ListMusic size={25} className="relative" />
+              <span className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/15" />
+              <span className="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-white/10" />
+              <ListMusic size={32} className="relative" />
             </span>
           )}
-          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">{playlist.videos_count}</span>
+          <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/60 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">{category}</span>
+          <span className={`absolute bottom-2 right-2 grid h-10 w-10 place-items-center rounded-full bg-violet-600 text-white shadow-lg transition duration-200 ${selected ? "scale-100 opacity-100" : "translate-y-1 scale-90 opacity-0 group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100"}`}><Pencil size={16} /></span>
         </span>
-
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--royal)]">{category}</span>{playlist.read_only && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-400">Read only</span>}</span>
-          <span className="mt-2 block truncate text-base font-semibold">{playlist.title}</span>
-          <span className="mt-1 block truncate text-xs text-[var(--muted)]">{playlist.description || "A collection of your releases."}</span>
-          <span className="mt-2 block text-xs font-medium capitalize text-[var(--muted)]">{playlist.videos_count} {playlist.videos_count === 1 ? "video" : "videos"} · {playlist.visibility}</span>
-          {selected && <span className="mt-2 block text-xs font-bold text-[var(--royal)]">Currently editing</span>}
+        <span className="block px-0.5 pb-1 pt-3">
+          <span className="flex min-w-0 items-center gap-1.5"><span className="block min-w-0 flex-1 truncate text-sm font-semibold">{playlist.title}</span>{playlist.read_only && <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-400">Read only</span>}</span>
+          <span className="mt-1 block truncate text-[11px] text-[var(--muted)]">{playlist.description || "A collection of your releases."}</span>
+          <span className="mt-1.5 flex items-center gap-1 text-[10px] font-medium capitalize text-[var(--muted)]">{playlist.visibility === "public" ? <Globe2 size={11} /> : <Lock size={11} />}{playlist.visibility}<span>·</span><span>{playlist.videos_count} {playlist.videos_count === 1 ? "video" : "videos"}</span>{selected && <span className="ml-auto font-bold text-[var(--royal)]">Editing</span>}</span>
         </span>
       </button>
-
-      <div className="absolute right-3 top-3 flex gap-1 rounded-lg bg-[var(--panel)]/90 p-1 shadow-sm backdrop-blur">
-        <button type="button" onClick={onEdit} aria-label={`${selected ? "Close editor for" : "Edit"} ${playlist.title}`} className={`icon-button ${selected ? "text-[var(--royal)]" : ""}`}><Pencil size={15} /></button>
-        <button type="button" onClick={onDelete} aria-label={`Delete ${playlist.title}`} className="icon-button text-pink-500"><Trash2 size={15} /></button>
-      </div>
+      <button type="button" onClick={onDelete} aria-label={`Delete ${playlist.title}`} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white opacity-70 backdrop-blur transition hover:bg-pink-600 group-hover:opacity-100 group-focus-within:opacity-100 sm:opacity-0"><Trash2 size={13} /></button>
     </article>
   );
 }
@@ -424,9 +591,7 @@ function PlaylistVideoThumbnail({ video, order }: { video?: Video; order?: numbe
   return <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-900">{video?.thumbnail_url ? <Image src={video.thumbnail_url} alt="" fill sizes="64px" className="object-cover" /> : <span className="absolute inset-0 grid place-items-center bg-[linear-gradient(145deg,#27272a,#18181b)] text-zinc-500"><Music2 size={20} /></span>}{order && <span className="absolute left-1.5 top-1.5 grid h-6 min-w-6 place-items-center rounded-md bg-black/75 px-1 text-[10px] font-black text-white">{order}</span>}</span>;
 }
 
-function Panel({ title, helper, children }: { title: string; helper: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-7"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-1 text-sm text-[var(--muted)]">{helper}</p><div className="mt-6">{children}</div></section>; }
 function StudioField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-2 block text-sm font-semibold">{label}</span>{children}</label>; }
 function InlineError({ message }: { message: string }) { return <p role="alert" className="mb-4 rounded-xl border border-pink-500/20 bg-pink-500/10 p-3 text-sm text-pink-300">{message}</p>; }
 function FieldError({ message }: { message: string }) { return <p role="alert" className="mt-1.5 text-xs font-medium text-pink-400">{message}</p>; }
-function Empty({ icon: Icon, title, text }: { icon: React.ComponentType<{ size?: number; className?: string }>; title: string; text: string }) { return <div className="py-12 text-center"><Icon size={32} className="mx-auto text-[var(--muted)]" /><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1 text-sm text-[var(--muted)]">{text}</p></div>; }
 function WorkspaceError({ retry }: { retry: () => void }) { return <div className="page-content px-6 text-center"><h1 className="text-2xl font-semibold">Workspace unavailable</h1><p className="mt-2 text-sm text-[var(--muted)]">We could not load your artist workspace.</p><button onClick={retry} className="primary-button mt-5">Try again</button></div>; }
