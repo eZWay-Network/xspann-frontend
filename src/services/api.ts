@@ -6,12 +6,14 @@ export type ApiOptions = RequestInit & { token?: string | null };
 export class ApiError extends Error {
   status: number;
   errors: Record<string, string[]>;
+  retryAfterMs: number;
 
-  constructor(message: string, status: number, errors: Record<string, string[]> = {}) {
+  constructor(message: string, status: number, errors: Record<string, string[]> = {}, retryAfterMs = 0) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -39,7 +41,9 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
         ? "Upload is larger than the active server request limit. Please try again; local video uploads are sent in chunks, but the API may need a restart."
         : `API request failed: ${response.status}`;
 
-    throw new ApiError(payload?.message ?? fallbackMessage, response.status, payload?.errors ?? {});
+    const retryAfterSeconds = Number(response.headers.get("Retry-After"));
+    const retryAfterMs = Number.isFinite(retryAfterSeconds) ? Math.max(0, retryAfterSeconds) * 1000 : 0;
+    throw new ApiError(payload?.message ?? fallbackMessage, response.status, payload?.errors ?? {}, retryAfterMs);
   }
 
   return (response.status === 204 ? undefined : payload) as T;
@@ -54,7 +58,7 @@ export async function apiDownload(path: string, token: string, signal?: AbortSig
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new ApiError(payload?.message ?? `Download failed: ${response.status}`, response.status, payload?.errors ?? {});
+    throw new ApiError(payload?.message ?? `Download failed: ${response.status}`, response.status, payload?.errors ?? {}, Math.max(0, Number(response.headers.get("Retry-After")) || 0) * 1000);
   }
 
   return response.blob();
@@ -80,7 +84,7 @@ export async function apiMediaBlob(path: string, token: string, signal?: AbortSi
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new ApiError(payload?.message ?? `Preview failed: ${response.status}`, response.status, payload?.errors ?? {});
+    throw new ApiError(payload?.message ?? `Preview failed: ${response.status}`, response.status, payload?.errors ?? {}, Math.max(0, Number(response.headers.get("Retry-After")) || 0) * 1000);
   }
 
   const contentLength = Number(response.headers.get("content-length") ?? 0);

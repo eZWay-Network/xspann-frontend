@@ -5,28 +5,21 @@ function positiveInteger(value: unknown) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
+export function threadForHint(event: string, payload: Record<string, unknown>) {
+  if (event === "message.created") return positiveInteger(payload.conversation_id);
+  if (event === "conversation.updated") return positiveInteger(payload.resource_id ?? payload.conversation_id);
+  return null;
+}
+
 export class RealtimeHintTracker {
   private readonly seen = new Set<string>();
-  private readonly versions = new Map<string, number>();
 
   accept(event: string, payload: Record<string, unknown>) {
-    const eventId = typeof payload.event_id === "string" ? payload.event_id : null;
-    if (eventId && this.seen.has(eventId)) return false;
-
-    const resourceId = positiveInteger(payload.conversation_id ?? payload.release_id ?? payload.boost_id ?? payload.placement_id ?? payload.id);
-    const version = positiveInteger(payload.version);
-    const family = event === "message.created" || event === "conversation.updated" ? "conversation"
-      : event === "release.updated" ? "release"
-        : event === "boost.updated" ? "boost"
-          : event === "placement.updated" ? "placement" : event;
-    const resourceKey = resourceId && version ? `${family}:${resourceId}` : null;
-    if (resourceKey && version! <= (this.versions.get(resourceKey) ?? 0)) return false;
-
-    if (eventId) {
-      this.seen.add(eventId);
-      if (this.seen.size > 500) this.seen.delete(this.seen.values().next().value!);
-    }
-    if (resourceKey && version) this.versions.set(resourceKey, version);
+    if (payload.type && payload.type !== event) return false;
+    const id = payload.event_id;
+    if (typeof id !== "string" || !id || this.seen.has(id)) return false;
+    this.seen.add(id);
+    if (this.seen.size > 512) this.seen.delete(this.seen.values().next().value!);
     return true;
   }
 }

@@ -11,6 +11,7 @@ import { XpnLoader } from "@/components/common/xpn-loader";
 import { cx, shortRelativeTime } from "@/lib/format";
 import { categoryOf, collapseNotifications, notificationDetails, type ActivityItem } from "@/lib/notifications";
 import { queryKeys } from "@/lib/query-keys";
+import { useRealtimeStatus } from "@/hooks/use-realtime-status";
 import { ApiError } from "@/services/api";
 import { getCommentReplies, getComments } from "@/services/comments";
 import { clearReadNotifications, getNotifications, markAllNotificationsRead, markNotificationRead, NOTIFICATION_REFRESH_INTERVAL_MS } from "@/services/notifications";
@@ -30,6 +31,7 @@ export function ActivityPage() {
   const { token, user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const realtimeStatus = useRealtimeStatus();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
@@ -43,7 +45,7 @@ export function ActivityPage() {
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined,
     enabled: Boolean(token && user),
-    refetchInterval: NOTIFICATION_REFRESH_INTERVAL_MS,
+    refetchInterval: realtimeStatus === "ready" ? 75_000 : NOTIFICATION_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: true,
   });
   const notifications = collapseNotifications(notificationsQuery.data?.pages.flatMap((page) => page.data) ?? []);
@@ -53,6 +55,7 @@ export function ActivityPage() {
   const earlier = filtered.filter((item) => item.unreadIds.length === 0 && new Date(item.notification.created_at).getTime() < weekAgo);
 
   async function refreshNotifications() {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.summary(user!.id) });
     await queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user!.id) });
   }
 

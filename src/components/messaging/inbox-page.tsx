@@ -14,18 +14,18 @@ export function InboxPage() {
   const { token, user } = useAuth();
   const realtimeStatus = useRealtimeStatus();
   const [query, setQuery] = useState("");
-  const enabled = Boolean(token && user && realtimeStatus !== "connecting");
+  const enabled = Boolean(token && user);
   const inbox = useInfiniteQuery({
     queryKey: queryKeys.conversations(user?.id ?? 0), enabled,
     queryFn: ({ pageParam }) => getConversations(token!, pageParam), initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.meta.next_cursor ?? undefined,
-    refetchInterval: realtimeStatus === "ready" ? false : 30_000,
+    refetchInterval: realtimeStatus === "ready" ? 75_000 : 20_000,
   });
   const announcements = useInfiniteQuery({
     queryKey: queryKeys.announcements(user?.id ?? 0), enabled,
     queryFn: ({ pageParam }) => getAnnouncements(token!, pageParam), initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.meta.next_cursor ?? undefined,
-    refetchInterval: realtimeStatus === "ready" ? false : 30_000,
+    refetchInterval: realtimeStatus === "ready" ? 75_000 : 20_000,
   });
   const search = query.trim().toLowerCase();
   const conversations = (inbox.data?.pages.flatMap((page) => page.data) ?? []).filter((item) => !search || item.last_message?.body?.toLowerCase().includes(search) || String(item.recipient_user_id).includes(search));

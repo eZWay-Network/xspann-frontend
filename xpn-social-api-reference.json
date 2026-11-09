@@ -1,7 +1,7 @@
 {
   "title": "XPN Social API reference",
   "version": "v1",
-  "baseUrl": "http://localhost:8080/api/v1",
+  "baseUrl": "https://app.xpnsocial.com/api/v1",
   "groups": {
     "Authentication": [
       {
@@ -723,8 +723,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/feed?page=1",
-            "last": "http://localhost:8080/api/v1/feed?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/feed?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/feed?page=1",
             "prev": null,
             "next": null
           },
@@ -977,8 +977,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/feed/following?page=1",
-            "last": "http://localhost:8080/api/v1/feed/following?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/feed/following?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/feed/following?page=1",
             "prev": null,
             "next": null
           },
@@ -1235,8 +1235,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/discover?page=1",
-            "last": "http://localhost:8080/api/v1/discover?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/discover?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/discover?page=1",
             "prev": null,
             "next": null
           },
@@ -1316,8 +1316,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/discover/people?page=1",
-            "last": "http://localhost:8080/api/v1/discover/people?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/discover/people?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/discover/people?page=1",
             "prev": null,
             "next": null
           },
@@ -1468,8 +1468,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/videos?page=1",
-            "last": "http://localhost:8080/api/v1/videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/videos?page=1",
             "prev": null,
             "next": null
           },
@@ -1727,8 +1727,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/videos?page=1",
-            "last": "http://localhost:8080/api/v1/me/videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/videos?page=1",
             "prev": null,
             "next": null
           },
@@ -1891,6 +1891,13 @@
         "access": "active_verified_adult",
         "rate": null,
         "parameters": [
+          {
+            "name": "creation_id",
+            "in": "body",
+            "type": "string",
+            "required": false,
+            "description": "sometimes · required · uuid"
+          },
           {
             "name": "reuse_content",
             "in": "body",
@@ -2571,6 +2578,53 @@
     "Uploads": [
       {
         "group": "Uploads",
+        "title": "Find a creation attempt",
+        "description": "Find the exact non-deleted video or sound created with this UUID by the current account. An unknown attempt returns 404.",
+        "response": {
+          "data": {
+            "id": 1
+          }
+        },
+        "status": "200",
+        "example": {
+          "kind": "video",
+          "creation_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "limit": null,
+        "errors": {
+          "401": "Missing, expired, revoked or invalid bearer token.",
+          "403": "Inactive/unverified account, or an owner-only operation denied.",
+          "422": "Invalid parameters or a business validation failure.",
+          "429": "Too many requests. Back off before retrying."
+        },
+        "method": "POST",
+        "uri": "/api/v1/me/uploads/resolve",
+        "route": "/api/v1/me/uploads/resolve",
+        "id": "uploadcontroller-resolve",
+        "auth": true,
+        "access": "active_verified_adult",
+        "rate": 60,
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "body",
+            "type": "string",
+            "required": true,
+            "description": "required · in:video,sound"
+          },
+          {
+            "name": "creation_id",
+            "in": "body",
+            "type": "string",
+            "required": true,
+            "description": "required · uuid"
+          }
+        ],
+        "headers": [],
+        "contentType": "application/json"
+      },
+      {
+        "group": "Uploads",
         "title": "Upload an avatar",
         "description": "JPEG, PNG or WebP image, up to 5 MiB. Use avatar_url in PUT /auth/profile. The returned storage_path is a disk:key reference; pass it back unchanged. Send multipart/form-data with field file. Server and proxy upload limits may be lower.",
         "response": {
@@ -2672,7 +2726,7 @@
         "alternate": {
           "data": {
             "upload_method": "multipart",
-            "upload_url": "http://localhost:8080/api/v1/uploads/videos/local",
+            "upload_url": "https://app.xpnsocial.com/api/v1/uploads/videos/local",
             "storage_path": null,
             "headers": [],
             "field_name": "file",
@@ -2968,8 +3022,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/users/suggestions?page=1",
-            "last": "http://localhost:8080/api/v1/users/suggestions?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/users/suggestions?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/users/suggestions?page=1",
             "prev": null,
             "next": null
           },
@@ -3151,8 +3205,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/users/{username}/videos?page=1",
-            "last": "http://localhost:8080/api/v1/users/{username}/videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/users/{username}/videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/users/{username}/videos?page=1",
             "prev": null,
             "next": null
           },
@@ -3224,8 +3278,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/users/{username}/followers?page=1",
-            "last": "http://localhost:8080/api/v1/users/{username}/followers?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/users/{username}/followers?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/users/{username}/followers?page=1",
             "prev": null,
             "next": null
           },
@@ -3297,8 +3351,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/users/{username}/following?page=1",
-            "last": "http://localhost:8080/api/v1/users/{username}/following?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/users/{username}/following?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/users/{username}/following?page=1",
             "prev": null,
             "next": null
           },
@@ -3389,8 +3443,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/videos/{video}/comments?page=1",
-            "last": "http://localhost:8080/api/v1/videos/{video}/comments?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/videos/{video}/comments?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/videos/{video}/comments?page=1",
             "prev": null,
             "next": null
           },
@@ -3479,8 +3533,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/comments/{comment}/replies?page=1",
-            "last": "http://localhost:8080/api/v1/comments/{comment}/replies?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/comments/{comment}/replies?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/comments/{comment}/replies?page=1",
             "prev": null,
             "next": null
           },
@@ -3964,8 +4018,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/liked-videos?page=1",
-            "last": "http://localhost:8080/api/v1/me/liked-videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/liked-videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/liked-videos?page=1",
             "prev": null,
             "next": null
           },
@@ -4182,8 +4236,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/saved-videos?page=1",
-            "last": "http://localhost:8080/api/v1/me/saved-videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/saved-videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/saved-videos?page=1",
             "prev": null,
             "next": null
           },
@@ -4402,8 +4456,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/blocks?page=1",
-            "last": "http://localhost:8080/api/v1/me/blocks?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/blocks?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/blocks?page=1",
             "prev": null,
             "next": null
           },
@@ -4657,8 +4711,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/notifications?page=1",
-            "last": "http://localhost:8080/api/v1/notifications?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/notifications?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/notifications?page=1",
             "prev": null,
             "next": null
           },
@@ -4858,8 +4912,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/audios?page=1",
-            "last": "http://localhost:8080/api/v1/audios?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/audios?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/audios?page=1",
             "prev": null,
             "next": null
           },
@@ -5066,8 +5120,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/audios/{audio}/videos?page=1",
-            "last": "http://localhost:8080/api/v1/audios/{audio}/videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/audios/{audio}/videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/audios/{audio}/videos?page=1",
             "prev": null,
             "next": null
           },
@@ -5155,8 +5209,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/saved-audios?page=1",
-            "last": "http://localhost:8080/api/v1/me/saved-audios?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/saved-audios?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/saved-audios?page=1",
             "prev": null,
             "next": null
           },
@@ -5331,6 +5385,13 @@
         "access": "active_verified_adult",
         "rate": null,
         "parameters": [
+          {
+            "name": "creation_id",
+            "in": "body",
+            "type": "string",
+            "required": false,
+            "description": "sometimes · required · uuid"
+          },
           {
             "name": "reuse_allowed",
             "in": "body",
@@ -5539,7 +5600,7 @@
       {
         "group": "Billing",
         "title": "Stripe webhook receipt",
-        "description": "Provider callback; raw JSON and Stripe-Signature header. Maximum 1 MiB, 300-second tolerance, rotating secrets, account/environment and pinned 2024-06-20 Snapshot schema checks. Durable encrypted inbox; duplicates acknowledge 200. No JWT; browser billing routes retain authentication.",
+        "description": "Provider callback; raw JSON and Stripe-Signature header. Maximum 1 MiB, 300-second tolerance, rotating secrets, own-account Snapshot payloads and matching test/live mode. The endpoint version is independent of the outbound Stripe API version used to retrieve billing objects. Durable encrypted inbox; duplicates acknowledge 200. No JWT; browser billing routes retain authentication.",
         "response": {
           "received": true
         },
@@ -5623,8 +5684,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/billing/invoices?page=1",
-            "last": "http://localhost:8080/api/v1/me/billing/invoices?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/billing/invoices?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/billing/invoices?page=1",
             "prev": null,
             "next": null
           },
@@ -6010,8 +6071,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/artist/releases?page=1",
-            "last": "http://localhost:8080/api/v1/me/artist/releases?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/artist/releases?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/artist/releases?page=1",
             "prev": null,
             "next": null
           },
@@ -6664,8 +6725,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/artists?page=1",
-            "last": "http://localhost:8080/api/v1/artists?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/artists?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/artists?page=1",
             "prev": null,
             "next": null
           },
@@ -6965,8 +7026,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/artists/{artist}/videos?page=1",
-            "last": "http://localhost:8080/api/v1/artists/{artist}/videos?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/artists/{artist}/videos?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/artists/{artist}/videos?page=1",
             "prev": null,
             "next": null
           },
@@ -7038,8 +7099,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/artists/{artist}/followers?page=1",
-            "last": "http://localhost:8080/api/v1/artists/{artist}/followers?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/artists/{artist}/followers?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/artists/{artist}/followers?page=1",
             "prev": null,
             "next": null
           },
@@ -8731,8 +8792,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/artists/{artist}/playlists?page=1",
-            "last": "http://localhost:8080/api/v1/artists/{artist}/playlists?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/artists/{artist}/playlists?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/artists/{artist}/playlists?page=1",
             "prev": null,
             "next": null
           },
@@ -8964,8 +9025,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/artist/playlists?page=1",
-            "last": "http://localhost:8080/api/v1/me/artist/playlists?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/artist/playlists?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/artist/playlists?page=1",
             "prev": null,
             "next": null
           },
@@ -9776,22 +9837,22 @@
             "policies": {
               "terms": {
                 "version": "2026-10-29",
-                "url": "http://localhost:3000/terms",
+                "url": "https://xpnsocial.com/terms",
                 "required": true
               },
               "privacy": {
                 "version": "2026-10-29",
-                "url": "http://localhost:3000/privacy",
+                "url": "https://xpnsocial.com/privacy",
                 "required": true
               },
               "community": {
                 "version": "2026-10-29",
-                "url": "http://localhost:3000/community",
+                "url": "https://xpnsocial.com/community",
                 "required": true
               },
               "marketing": {
                 "version": "2026-10-29",
-                "url": "http://localhost:3000/marketing-preferences",
+                "url": "https://xpnsocial.com/marketing-preferences",
                 "required": false
               }
             },
@@ -10322,8 +10383,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/moderation-decisions?page=1",
-            "last": "http://localhost:8080/api/v1/me/moderation-decisions?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/moderation-decisions?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/moderation-decisions?page=1",
             "prev": null,
             "next": null
           },
@@ -10387,8 +10448,8 @@
             }
           ],
           "links": {
-            "first": "http://localhost:8080/api/v1/me/moderation-appeals?page=1",
-            "last": "http://localhost:8080/api/v1/me/moderation-appeals?page=1",
+            "first": "https://app.xpnsocial.com/api/v1/me/moderation-appeals?page=1",
+            "last": "https://app.xpnsocial.com/api/v1/me/moderation-appeals?page=1",
             "prev": null,
             "next": null
           },
@@ -10586,6 +10647,38 @@
         ],
         "headers": [],
         "contentType": "application/json"
+      },
+      {
+        "group": "Messaging and preferences",
+        "title": "Your communication unread totals",
+        "description": "Private counts for unread incoming messages and activity. Reading this endpoint does not advance either cursor.",
+        "response": {
+          "data": {
+            "unread_messages": 3,
+            "unread_notifications": 5
+          }
+        },
+        "example": [],
+        "status": "200",
+        "limit": null,
+        "errors": {
+          "401": "Missing, expired, revoked or invalid bearer token.",
+          "403": "Inactive/unverified account, or an owner-only operation denied.",
+          "409": "Stale version, immutable accepted content or idempotency conflict.",
+          "422": "Invalid input; writes reject unknown fields.",
+          "429": "Per-account send, conversation creation or paid-period quota exhausted."
+        },
+        "cursor": false,
+        "method": "GET",
+        "uri": "/api/v1/me/communication-summary",
+        "route": "/api/v1/me/communication-summary",
+        "id": "communicationcontroller-summary",
+        "auth": true,
+        "access": "active_verified_adult",
+        "rate": null,
+        "parameters": [],
+        "headers": [],
+        "contentType": null
       },
       {
         "group": "Messaging and preferences",
@@ -11706,7 +11799,7 @@
       {
         "group": "Realtime",
         "title": "Register this login for Relay",
-        "description": "Idempotent per current JWT record. Opaque private session channel and public connection settings only. Never exposes the secret. Logout/refresh deletes the old channel; expiry/suspension/deletion suppress publishing. Missing configuration returns 503; REST remains available.",
+        "description": "Idempotent per current JWT record. Opaque private session channel and public connection settings. Hints contain event_id, type, occurred_at, resource_id and version. message.created additionally identifies its parent conversation_id. Fetch authorized REST state after reconnect. Never exposes the secret. Logout/refresh deletes the old channel; expiry/suspension/deletion suppress publishing. Missing configuration returns 503; REST remains available.",
         "response": {
           "data": {
             "key": "public-key",

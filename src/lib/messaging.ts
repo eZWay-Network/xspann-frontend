@@ -1,4 +1,4 @@
-import type { ConversationMessage } from "@/types/api";
+import type { ConversationMessage, MessagePage } from "@/types/api";
 
 export function mergeMessages(...groups: Array<ConversationMessage[] | undefined>) {
   const byId = new Map<number, ConversationMessage>();
@@ -32,4 +32,55 @@ export function getAnnouncementSendKey(userId: number, announcementId: number, v
 
 export function clearAnnouncementSendKey(userId: number, announcementId: number, version: number) {
   localStorage.removeItem(announcementSendStorageKey(userId, announcementId, version));
+}
+
+type Load = (direction: { beforeId?: number; afterId?: number }) => Promise<MessagePage>;
+
+// Acknowledged sends can appear immediately. Only REST pages advance the forward cursor.
+export class ThreadHistory {
+  rows: ConversationMessage[] = [];
+  before: number | null = null;
+  private cursor: number | null = null;
+
+  acknowledge(row: ConversationMessage) {
+    if (row.id > (this.cursor ?? 0)) this.rows = mergeMessages(this.rows, [row]);
+  }
+
+  async sync(load: Load, structural: boolean) {
+    if (structural || this.cursor === null) {
+      const oldest = this.rows[0]?.id;
+      const fresh: ConversationMessage[] = [];
+      let before: number | null = null;
+      do {
+        const page: MessagePage = await load(before === null ? {} : { beforeId: before });
+        fresh.push(...page.data);
+        if (!page.meta.has_more) { before = null; break; }
+        const next = page.meta.next_before_id;
+        if (!next || (before !== null && next >= before)) throw Error("Invalid history cursor");
+        before = next;
+      } while (oldest !== undefined && before > oldest);
+      this.rows = mergeMessages(fresh);
+      this.before = before;
+      this.cursor = newestMessageId(this.rows);
+      return;
+    }
+    for (;;) {
+      const afterId: number = this.cursor;
+      const page = await load({ afterId });
+      const next = page.meta.next_after_id;
+      if (next === null || next < afterId || (page.meta.has_more && next === afterId)) throw Error("Invalid message cursor");
+      this.rows = mergeMessages(this.rows, page.data);
+      this.cursor = next;
+      if (!page.meta.has_more) return;
+    }
+  }
+
+  async older(load: Load) {
+    if (this.before === null) return;
+    const page = await load({ beforeId: this.before });
+    const next = page.meta.next_before_id;
+    if (page.meta.has_more && (!next || next >= this.before)) throw Error("Invalid history cursor");
+    this.rows = mergeMessages(page.data, this.rows);
+    this.before = page.meta.has_more ? next : null;
+  }
 }
