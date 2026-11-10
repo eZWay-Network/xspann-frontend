@@ -15,8 +15,6 @@ import type { Artist, UserSummary } from "@/types/api";
 export function ArtistProfile({ slug }: { slug: string }) {
   const { token, user } = useAuth();
   const client = useQueryClient();
-  const [updateConsentChecked, setUpdateConsentChecked] = useState(false);
-  const [updateError, setUpdateError] = useState("");
   const artistQuery = useQuery({ queryKey: ["artist", slug, user?.id ?? "guest"], queryFn: () => getArtistBySlug(slug, token) });
   const artist = artistQuery.data?.data;
   const videos = useInfiniteQuery({ queryKey: ["artist-videos", artist?.id, user?.id ?? "guest"], enabled: Boolean(artist), queryFn: ({ pageParam }) => getArtistVideos(artist!.id, token, pageParam), initialPageParam: 1, getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page ? lastPage.meta.current_page + 1 : undefined });
@@ -24,7 +22,6 @@ export function ArtistProfile({ slug }: { slug: string }) {
   const followers = useQuery({ queryKey: ["artist-followers", artist?.id, user?.id ?? "guest"], enabled: Boolean(artist), queryFn: () => getArtistFollowers(artist!.id, token) });
   const videoResults = videos.data?.pages.flatMap((page) => page.data) ?? [];
   const playlistResults = playlists.data?.pages.flatMap((page) => page.data) ?? [];
-  const subscription = useQuery({ queryKey: ["artist-updates", artist?.id, user?.id], enabled: Boolean(artist && token), queryFn: () => getUpdateSubscription(artist!.id, token!) });
   const follow = useMutation({
     mutationFn: () => artist!.viewer.following ? unfollowArtist(artist!.id, token!) : followArtist(artist!.id, token!),
     onSuccess: (response) => {
@@ -34,11 +31,6 @@ export function ArtistProfile({ slug }: { slug: string }) {
       void client.invalidateQueries({ queryKey: ["artist-followers", artist!.id] });
     },
   });
-  const updates = useMutation({
-    mutationFn: () => setUpdateSubscription(artist!.id, subscription.data?.data.subscribed ? { subscribed: false } : { subscribed: true, consent_version: subscription.data!.data.current_consent_version }, token!),
-    onSuccess: () => { setUpdateConsentChecked(false); setUpdateError(""); void subscription.refetch(); },
-    onError: (caught) => setUpdateError(caught instanceof Error ? caught.message : "Could not change your artist-update subscription."),
-  });
 
   if (artistQuery.isPending) return <div className="page-content grid h-full place-items-center"><XpnLoader label="Loading artist…" /></div>;
   if (!artist) return <div className="page-content px-6 text-center"><h1 className="text-2xl font-semibold">Artist unavailable</h1><Link href="/artists" className="mt-4 inline-block font-bold text-[var(--royal)]">Browse artists</Link></div>;
@@ -47,7 +39,7 @@ export function ArtistProfile({ slug }: { slug: string }) {
     <div className="relative overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--panel)]"><div className="absolute inset-x-0 top-0 h-44 bg-[radial-gradient(circle_at_top_left,#7c3aed55,transparent_58%)]" /><div className="relative flex flex-col gap-6 p-6 pt-20 sm:flex-row sm:items-end sm:p-9 sm:pt-24">
       <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-2xl border-4 border-[var(--panel)] bg-[var(--surface)]">{artist.image_url ? <Image src={artist.image_url} alt={artist.stage_name} fill sizes="128px" className="object-cover" /> : <div className="grid h-full place-items-center"><Music2 size={38} className="text-[var(--muted)]" /></div>}</div>
       <div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--royal)]">Artist profile</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{artist.stage_name}</h1><div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-[var(--muted)]"><span className="inline-flex items-center gap-1.5"><Users size={16} /> {artist.followers_count} followers</span>{artist.location && <span className="inline-flex items-center gap-1.5"><MapPin size={16} /> {artist.location}</span>}</div></div>
-      {user?.id !== artist.user_id && <div className="flex max-w-sm flex-col items-end gap-2">{token && subscription.data?.data.subscribed && <button disabled={updates.isPending} onClick={() => updates.mutate()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line)] px-4 text-sm font-semibold"><Bell size={16} /> Updates on · turn off</button>}{token && subscription.data && !subscription.data.data.subscribed && subscription.data.data.wording && <div className="rounded-xl border border-[var(--line)] bg-[var(--background)] p-3"><label className="flex items-start gap-2 text-xs leading-5"><input type="checkbox" checked={updateConsentChecked} onChange={(event) => setUpdateConsentChecked(event.target.checked)} className="mt-1 accent-violet-600" /><span>{subscription.data.data.wording}</span></label><button disabled={!updateConsentChecked || updates.isPending || !subscription.data.data.artist_updates_enabled} onClick={() => updates.mutate()} className="primary-button mt-2 w-full"><Bell size={15} /> Get artist updates</button></div>}{token && subscription.data && !subscription.data.data.subscribed && !subscription.data.data.wording && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">New update subscriptions are paused until the current consent wording is available.</p>}{updateError && <p role="alert" className="text-xs text-pink-400">{updateError}</p>}{token ? <button disabled={follow.isPending} onClick={() => follow.mutate()} className="primary-button">{follow.isPending && <LoaderCircle className="animate-spin" size={15} />}{artist.viewer.following ? "Following" : "Follow"}</button> : <Link href={`/login?next=${encodeURIComponent(`/artists/${slug}`)}`} className="primary-button">Sign in to follow</Link>}</div>}
+      {user?.id !== artist.user_id && <div className="flex max-w-sm flex-col items-end gap-2">{token && user && <FanSubscription key={`${artist.id}-${user.id}`} artistId={artist.id} userId={user.id} token={token} />}{token ? <button disabled={follow.isPending} onClick={() => follow.mutate()} className="primary-button">{follow.isPending && <LoaderCircle className="animate-spin" size={15} />}{artist.viewer.following ? "Following" : "Follow"}</button> : <Link href={`/login?next=${encodeURIComponent(`/artists/${slug}`)}`} className="primary-button">Sign in to follow</Link>}</div>}
     </div></div>
     {artist.featured_release && <Link href={`/video/${artist.featured_release.id}`} className="mt-6 flex flex-col gap-4 overflow-hidden rounded-2xl border border-violet-500/25 bg-[linear-gradient(110deg,#7c3aed18,var(--panel))] p-5 sm:flex-row sm:items-center"><div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-[var(--surface)] sm:w-52">{artist.featured_release.thumbnail_url && <Image src={artist.featured_release.thumbnail_url} alt="" fill sizes="208px" className="object-cover" />}<span className="absolute inset-0 grid place-items-center"><span className="grid h-10 w-10 place-items-center rounded-full bg-black/65 text-white"><Play size={17} fill="currentColor" /></span></span></div><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[var(--royal)]">Featured release</p><h2 className="mt-2 text-xl font-semibold">{artist.featured_release.caption || "Featured video"}</h2><p className="mt-2 text-sm text-[var(--muted)]">Selected by {artist.stage_name}</p></div></Link>}
     <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]"><div><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6"><h2 className="text-lg font-semibold">About</h2><p className="mt-3 whitespace-pre-line text-sm leading-7 text-[var(--muted)]">{artist.bio || "This artist has not added a bio yet."}</p><div className="mt-4 flex flex-wrap gap-2">{artist.genres.map((genre) => <span key={genre.id} className="rounded-full bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-[var(--royal)]">{genre.name}</span>)}</div></section>
@@ -55,6 +47,35 @@ export function ArtistProfile({ slug }: { slug: string }) {
       <aside className="space-y-5"><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5"><h2 className="font-semibold">Listen & connect</h2><div className="mt-3 space-y-2">{artist.links.map((link) => <a key={`${link.type}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl bg-[var(--surface)] px-3 py-3 text-sm font-medium"><span>{link.label}</span><ExternalLink size={14} className="text-[var(--muted)]" /></a>)}{!artist.links.length && <p className="text-sm text-[var(--muted)]">No links yet.</p>}</div></section><section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5"><h2 className="font-semibold">Playlists</h2><div className="mt-3 space-y-3">{playlistResults.map((playlist) => <Link href={`/artists/${artist.slug}/playlists/${playlist.id}`} key={playlist.id} className="flex items-center gap-3 rounded-xl bg-[var(--surface)] p-2.5 transition hover:bg-[var(--surface-hover)]"><span className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-900">{playlist.cover_url ? <Image src={playlist.cover_url} alt="" fill sizes="48px" className="object-cover" /> : <span className="absolute inset-0 grid place-items-center bg-violet-950"><Music2 size={17} className="text-violet-200" /></span>}</span><span className="min-w-0"><span className="block truncate text-sm font-medium">{playlist.title}</span><span className="mt-1 block text-xs text-[var(--muted)]">{playlist.videos_count} releases · {playlist.category.replaceAll("_", " ")}</span></span></Link>)}{!playlistResults.length && <p className="text-sm text-[var(--muted)]">No public playlists.</p>}{playlists.hasNextPage && <button type="button" disabled={playlists.isFetchingNextPage} onClick={() => void playlists.fetchNextPage()} className="text-xs font-bold text-[var(--royal)]">Load more playlists</button>}</div></section><FollowersCard followers={followers.data?.data} loading={followers.isPending} total={artist.followers_count} /></aside>
     </div>
   </div></section>;
+}
+
+function FanSubscription({ artistId, userId, token }: { artistId: number; userId: number; token: string }) {
+  const client = useQueryClient();
+  const key = ["artist-updates", artistId, userId];
+  const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
+  const query = useQuery({ queryKey: key, queryFn: () => getUpdateSubscription(artistId, token) });
+  const consent = query.data?.data;
+  const update = useMutation({
+    mutationFn: (subscribe: boolean) => setUpdateSubscription(artistId, subscribe
+      ? { subscribed: true, consent_version: consent!.current_consent_version }
+      : { subscribed: false }, token),
+    onSuccess: (response) => { client.setQueryData(key, response); setAcceptedVersion(null); },
+  });
+
+  if (!consent) return query.isError ? <button onClick={() => void query.refetch()}>Retry loading fan updates</button> : null;
+  const needsConsent = !consent.subscribed || consent.consent_version !== consent.current_consent_version;
+  const checked = acceptedVersion === consent.current_consent_version;
+
+  return <div className="w-full rounded-xl border border-[var(--line)] p-3 text-sm">
+    <p className="font-semibold">Fan updates</p>
+    {!consent.artist_updates_enabled && <p className="mt-1 text-xs text-[var(--muted)]">Artist updates are paused in your communication preferences.</p>}
+    {needsConsent && (consent.wording ? <>
+      <label className="mt-2 flex items-start gap-2"><input type="checkbox" checked={checked} disabled={!consent.artist_updates_enabled || update.isPending} onChange={(event) => setAcceptedVersion(event.target.checked ? consent.current_consent_version : null)} className="mt-1 accent-violet-600" />{consent.wording}</label>
+      <button disabled={!checked || update.isPending || !consent.artist_updates_enabled} onClick={() => update.mutate(true)} className="primary-button mt-2 w-full"><Bell size={15} />{consent.subscribed ? "Renew consent" : "Get artist updates"}</button>
+    </> : <p className="mt-1 text-xs text-[var(--muted)]">Consent wording is currently unavailable.</p>)}
+    {consent.subscribed && <button disabled={update.isPending} onClick={() => update.mutate(false)} className="mt-2 text-xs font-semibold text-[var(--royal)]">Stop updates from this artist</button>}
+    {update.isError && <p role="alert" className="mt-2 text-xs text-pink-400">{update.error.message}</p>}
+  </div>;
 }
 
 function FollowersCard({ followers, loading, total }: { followers?: UserSummary[]; loading: boolean; total: number }) {
