@@ -3,7 +3,11 @@ import { apiRequest } from "./api";
 
 export const getPromotionOffers = () => apiRequest<SingleResponse<PromotionOffer[]>>("/promotion-offers");
 export const getFeaturedArtists = (cursor?: string | null, token?: string | null) => apiRequest<CursorResponse<FeaturedArtistPlacement>>(`/artists/featured?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { token });
-export const getPromotedPlacements = (token?: string | null) => apiRequest<{ data: PromotionPlacement[]; meta: { capacity: number } }>("/promotions/placements?surface=web_promoted_videos", { token });
+export const discoverInventory = "discover_promoted_videos";
+export const getPromotedPlacements = (token?: string | null, signal?: AbortSignal) =>
+  apiRequest<{ data: PromotionPlacement[]; meta: { capacity: number } }>(
+    `/promotions/placements?surface=${discoverInventory}&platform=web`, { token, signal, cache: "no-store" },
+  );
 export const recordPromotionEvent = (tokenValue: string, type: "render" | "click", eventId: string, token?: string | null) => apiRequest<SingleResponse<{ accepted: boolean; duplicate: boolean; billable: false }>>("/promotions/events", { method: "POST", token, body: JSON.stringify({ token: tokenValue, event_id: eventId, type }) });
 export const getBoostBalance = (token: string) => apiRequest<SingleResponse<BoostBalance>>("/me/artist/boost-balance", { token });
 export const getBoostLedger = (token: string, cursor?: string | null) => apiRequest<CursorResponse<BoostLedgerEntry>>(`/me/artist/boost-ledger?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { token });

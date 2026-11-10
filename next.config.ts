@@ -15,14 +15,21 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return backendUrl
-      ? [{ source: "/api/v1/:path*", destination: `${backendUrl}/api/v1/:path*` }]
+      ? [
+          {
+            source: "/api/v1/:path*",
+            destination: `${backendUrl}/api/v1/:path*`,
+          },
+        ]
       : [];
   },
   images: {
     remotePatterns: [
       ...(backendOrigin
-        ? ["/storage/**", "/media/**"].map((pathname) => ({
-            protocol: backendOrigin.protocol.replace(":", "") as "http" | "https",
+        ? ["/storage/**", "/media/**", "/uploads/**"].map((pathname) => ({
+            protocol: backendOrigin.protocol.replace(":", "") as
+              | "http"
+              | "https",
             hostname: backendOrigin.hostname,
             port: backendOrigin.port,
             pathname,

@@ -295,12 +295,12 @@ export type Announcement = {
 };
 
 export type PromotionOffer = {
-  id: string; surface: string; enabled: boolean; configured: boolean; price_cents: number; currency: string;
+  id: string; surface: string; platforms: string[]; enabled_platforms: string[]; enabled: boolean; configured: boolean; price_cents: number; currency: string;
   duration_seconds: number; capacity: number; rights_version: string; disclosure: string; terms: string;
 };
 export type PromotionPlacement = {
   boost_id: number; surface: string; disclosure: string; sponsor: { artist_id: number; user_id: number; name: string; slug: string };
-  video: Video; expires_at: string; event_token: string;
+  video: Video; expires_at: string; token_expires_at: string; event_token: string;
 };
 export type BoostBalance = { available_cents: number; reserved_cents: number; used_cents: number; held_cents: number; currency: string; spending_held: boolean };
 export type BoostLedgerEntry = {
