@@ -319,8 +319,8 @@ export type ArtistPlacement = {
   id: number; artist_id: number; boost_id: number | null; type: "feature" | "network_post" | "boost" | string;
   month: string; destination: string; status: string; version: number; starts_at: string | null; ends_at: string | null;
   due_at: string | null; reason: string | null;
-  extension: { starts_at: string | null; ends_at: string | null; consent: boolean | null; consented_at: string | null } | null;
-  evidence: { url?: string; label?: string; completed_at?: string } | string | null; created_at: string;
+  extension: { starts_at: string | null; ends_at: string | null; consent: "pending" | "accepted" | "rejected" | null; consented_at: string | null } | null;
+  evidence: { proof: string; actual_starts_at: string; actual_ends_at: string; note: string | null; recorded_at: string } | null; created_at: string;
 };
 export type FeaturedArtistPlacement = {
   id: number; artist: { id: number; name: string; slug: string }; disclosure: string; starts_at: string; ends_at: string;

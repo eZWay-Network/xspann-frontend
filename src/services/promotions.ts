@@ -2,7 +2,7 @@ import type { ArtistPlacement, Boost, BoostBalance, BoostLedgerEntry, CursorResp
 import { apiRequest } from "./api";
 
 export const getPromotionOffers = () => apiRequest<SingleResponse<PromotionOffer[]>>("/promotion-offers");
-export const getFeaturedArtists = (cursor?: string | null) => apiRequest<CursorResponse<FeaturedArtistPlacement>>(`/artists/featured?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+export const getFeaturedArtists = (cursor?: string | null, token?: string | null) => apiRequest<CursorResponse<FeaturedArtistPlacement>>(`/artists/featured?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { token });
 export const getPromotedPlacements = (token?: string | null) => apiRequest<{ data: PromotionPlacement[]; meta: { capacity: number } }>("/promotions/placements?surface=web_promoted_videos", { token });
 export const recordPromotionEvent = (tokenValue: string, type: "render" | "click", eventId: string, token?: string | null) => apiRequest<SingleResponse<{ accepted: boolean; duplicate: boolean; billable: false }>>("/promotions/events", { method: "POST", token, body: JSON.stringify({ token: tokenValue, event_id: eventId, type }) });
 export const getBoostBalance = (token: string) => apiRequest<SingleResponse<BoostBalance>>("/me/artist/boost-balance", { token });

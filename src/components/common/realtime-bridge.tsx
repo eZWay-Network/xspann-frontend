@@ -49,9 +49,17 @@ export function RealtimeBridge() {
         }
       } finally { flushing = false; }
     }
+    const refreshPromotions = () => {
+      for (const key of ["boosts", "boost", "boost-balance", "boost-ledger", "artist-placements"]) {
+        void client.invalidateQueries({ queryKey: [key, userId] });
+      }
+      void client.invalidateQueries({ queryKey: ["promoted-placements"] });
+      void client.invalidateQueries({ queryKey: ["featured-artists"] });
+    };
     const reconcile = () => {
       for (const domain of ["inbox", "summary", "activity", "announcements"] as const) domains.add(domain);
       void flush();
+      refreshPromotions();
     };
     const invalidate = (event: string, payload: Record<string, unknown>) => {
       if (stopped || !tracker.accept(event, payload)) return;
@@ -72,12 +80,7 @@ export function RealtimeBridge() {
         void client.invalidateQueries({ queryKey: ["subscription", userId] });
       }
       if (event === "boost.updated" || event === "placement.updated") {
-        void client.invalidateQueries({ queryKey: ["boosts", userId] });
-        void client.invalidateQueries({ queryKey: ["boost-balance", userId] });
-        void client.invalidateQueries({ queryKey: ["boost-ledger", userId] });
-        void client.invalidateQueries({ queryKey: ["artist-placements", userId] });
-        void client.invalidateQueries({ queryKey: ["promoted-placements"] });
-        void client.invalidateQueries({ queryKey: ["featured-artists"] });
+        refreshPromotions();
       }
     };
 
