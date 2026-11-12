@@ -20,8 +20,8 @@ export function getArtist(id: number, token?: string | null) {
   return apiRequest<SingleResponse<Artist>>(`/artists/${id}`, { token });
 }
 
-export function getArtistVideos(artistId: number, token?: string | null, page = 1) {
-  return apiRequest<PaginatedResponse<Video>>(`/artists/${artistId}/videos?page=${page}&limit=24`, { token });
+export function getArtistVideos(artistId: number, token?: string | null, page = 1, limit = 12) {
+  return apiRequest<PaginatedResponse<Video>>(`/artists/${artistId}/videos?page=${page}&limit=${limit}`, { token });
 }
 
 export function getArtistFollowers(artistId: number, token?: string | null, page = 1) {
@@ -54,8 +54,8 @@ export function unfollowArtist(id: number, token: string) {
   return apiRequest<SingleResponse<{ following: boolean; followers_count: number }>>(`/artists/${id}/follow`, { method: "DELETE", token });
 }
 
-export function getArtistPlaylists(artistId: number, token?: string | null, page = 1) {
-  return apiRequest<PaginatedResponse<ArtistPlaylist>>(`/artists/${artistId}/playlists?page=${page}&limit=20`, { token });
+export function getArtistPlaylists(artistId: number, token?: string | null, page = 1, limit = 5) {
+  return apiRequest<PaginatedResponse<ArtistPlaylist>>(`/artists/${artistId}/playlists?page=${page}&limit=${limit}`, { token });
 }
 
 export function getArtistPlaylist(artistId: number, playlistId: number, token?: string | null) {

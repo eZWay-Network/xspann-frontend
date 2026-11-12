@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CalendarClock, Camera, CheckCircle2, ExternalLink, FolderPlus, Globe2, GripVertical, Link2, ListMusic, LoaderCircle, Lock, MapPin, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users } from "lucide-react";
+import { BarChart3, CalendarClock, Camera, CheckCircle2, ExternalLink, FolderPlus, Globe2, GripVertical, Link2, ListMusic, LoaderCircle, Lock, MapPin, Megaphone, Music2, Pencil, Plus, Rocket, Settings2, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -470,7 +470,7 @@ function PlaylistEditorForm({ playlist, availableVideos, token, userId, categori
     <form onSubmit={save} className="mt-6 rounded-2xl border border-violet-500/20 bg-[var(--background)] p-5">
       <div className="flex items-center justify-between">
         <div><p className="text-xs font-bold uppercase tracking-wider text-[var(--royal)]">Playlist editor</p><h3 className="mt-1 text-lg font-semibold">{playlist.title}</h3></div>
-        <button type="button" onClick={onClose} className="text-sm font-bold text-[var(--muted)]">Close</button>
+        <button type="button" onClick={onClose} aria-label="Close playlist editor" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-violet-500/10 hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"><X size={18} /></button>
       </div>
 
       {playlist.read_only && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-3 text-sm text-amber-400"><span>This playlist is read-only because the current plan limit is exceeded. You can still delete it from the list above.</span><Link href="/pricing" className="font-bold underline underline-offset-4">Upgrade plan</Link></div>}
