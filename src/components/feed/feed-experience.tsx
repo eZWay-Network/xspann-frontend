@@ -5,12 +5,13 @@ import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { ActionRail } from "@/components/video/action-rail";
 import { VideoOptions } from "@/components/video/video-options";
+import { useFeedInteractions } from "@/hooks/use-feed-interactions";
 import { cx } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
 import { saveAudio, unsaveAudio } from "@/services/audio";
 import { getFollowingFeedVideos, getFeedVideos, getVideo, recordVideoView } from "@/services/videos";
 import type { PaginatedResponse, Video } from "@/types/api";
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient, type InfiniteData, type QueryFilters } from "@tanstack/react-query";
 import {
   Bookmark,
   ChevronDown,
@@ -43,6 +44,11 @@ const progressScale = 1000;
 const emptyVideos: Video[] = [];
 
 export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) {
+  const { user } = useAuth();
+  return <Feed key={user?.id ?? "guest"} initialVideoId={initialVideoId} />;
+}
+
+function Feed({ initialVideoId }: { initialVideoId?: number }) {
   const { loading: authLoading, token, user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -53,13 +59,12 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const [activeVideoId, setActiveVideoId] = useState<number | null>(null);
   const [viewCountsByVideoId, setViewCountsByVideoId] = useState<Record<number, number>>({});
   const [commentCountsByVideoId, setCommentCountsByVideoId] = useState<Record<number, number>>({});
-  const [followingByUserId, setFollowingByUserId] = useState<Record<number, boolean>>({});
-  const [savedByVideoId, setSavedByVideoId] = useState<Record<number, { saved: boolean; savesCount: number }>>({});
   const [savedByAudioId, setSavedByAudioId] = useState<Record<number, boolean>>({});
   const [blockedCreatorIds, setBlockedCreatorIds] = useState<Set<number>>(() => new Set());
   const feedRef = useRef<HTMLElement>(null);
   const viewedVideoIdsRef = useRef<Set<number>>(new Set());
   const authScope = user?.id ?? "guest";
+  const { changes, following, confirmedFollowing, toggleLike, toggleSave, toggleFollow, recordShare } = useFeedInteractions(authScope, token);
   const feedScope = feedTab === "following" ? "following" : "for-you";
   const feedQueryKey = useMemo(() => queryKeys.feed(feedScope, authScope, initialVideoId), [authScope, feedScope, initialVideoId]);
   const queryClient = useQueryClient();
@@ -91,7 +96,10 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
     getNextPageParam: (lastPage) => lastPage.meta.current_page < lastPage.meta.last_page
       ? lastPage.meta.current_page + 1
       : undefined,
-    staleTime: 30 * 1000,
+    // Start a fresh ranking on entry. Returning from a share sheet keeps the loaded feed in place.
+    staleTime: 0,
+    refetchOnWindowFocus: query => !query.state.data,
+    refetchOnReconnect: query => !query.state.data,
   });
   const { hasNextPage, isFetching, isError: feedIsError, fetchNextPage } = feedQuery;
 
@@ -104,22 +112,28 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       return true;
     }));
   }, [feedQuery.data]);
-  const feedVideos = useMemo(() => baseFeedVideos
-    .filter((video) => !blockedCreatorIds.has(video.user.id))
-    .map((video) => ({
+  const visibleVideos = useMemo(() => baseFeedVideos.filter(video =>
+    !blockedCreatorIds.has(video.user.id) &&
+    !(confirmedFollowing[video.user.id] === false && (feedScope === "following" || video.visibility === "followers"))
+  ), [baseFeedVideos, blockedCreatorIds, confirmedFollowing, feedScope]);
+  const visibleVideoIds = useMemo(() => visibleVideos.map(video => video.id).join(","), [visibleVideos]);
+  const feedVideos = useMemo(() => visibleVideos.map(video => ({
     ...video,
     stats: {
       ...video.stats,
       views: viewCountsByVideoId[video.id] ?? video.stats.views,
       comments: commentCountsByVideoId[video.id] ?? video.stats.comments,
-      saves: savedByVideoId[video.id]?.savesCount ?? video.stats.saves,
+      likes: changes[video.id]?.likes ?? video.stats.likes,
+      saves: changes[video.id]?.saves ?? video.stats.saves,
+      shares: changes[video.id]?.shares ?? video.stats.shares,
     },
     viewer: {
       ...video.viewer,
-      following: followingByUserId[video.user.id] ?? video.viewer.following,
-      saved: savedByVideoId[video.id]?.saved ?? video.viewer.saved,
+      following: following[video.user.id] ?? video.viewer.following,
+      liked: changes[video.id]?.liked ?? video.viewer.liked,
+      saved: changes[video.id]?.saved ?? video.viewer.saved,
     },
-  })), [baseFeedVideos, blockedCreatorIds, commentCountsByVideoId, followingByUserId, savedByVideoId, viewCountsByVideoId]);
+  })), [visibleVideos, changes, commentCountsByVideoId, following, viewCountsByVideoId]);
   const effectiveActiveVideoId = feedVideos.some((video) => video.id === activeVideoId) ? activeVideoId : feedVideos[0]?.id ?? null;
 
   useEffect(() => {
@@ -141,7 +155,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
 
   useEffect(() => {
     const feed = feedRef.current;
-    if (!feed || !feedVideos.length) return;
+    if (!feed || !visibleVideoIds) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -162,11 +176,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       .forEach((item) => observer.observe(item));
 
     return () => observer.disconnect();
-  }, [feedVideos]);
-
-  const updateCreatorFollowState = useCallback((userId: number, following: boolean) => {
-    setFollowingByUserId((current) => ({ ...current, [userId]: following }));
-  }, []);
+  }, [visibleVideoIds]);
 
   const updateCommentCount = useCallback((videoId: number, delta: number) => {
     setCommentCountsByVideoId((current) => {
@@ -186,10 +196,6 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       : current);
   }, [baseFeedVideos, feedQueryKey, queryClient]);
 
-  const updateVideoSaveState = useCallback((videoId: number, saved: boolean, savesCount: number) => {
-    setSavedByVideoId((current) => ({ ...current, [videoId]: { saved, savesCount } }));
-  }, []);
-
   const updateAudioSaveState = useCallback((audioId: number, saved: boolean) => {
     setSavedByAudioId((current) => ({ ...current, [audioId]: saved }));
   }, []);
@@ -200,7 +206,13 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
       next.add(userId);
       return next;
     });
-  }, []);
+    const feeds: QueryFilters = { queryKey: ["feed"], predicate: query => query.queryKey[2] === authScope };
+    void queryClient.cancelQueries(feeds);
+    queryClient.setQueriesData<InfiniteData<PaginatedResponse<Video>, number>>(feeds, current => current && ({
+      ...current,
+      pages: current.pages.map(page => ({ ...page, data: page.data.filter(video => video.user.id !== userId) })),
+    }));
+  }, [authScope, queryClient]);
 
   const activeVideoIndex = effectiveActiveVideoId
     ? feedVideos.findIndex((video) => video.id === effectiveActiveVideoId)
@@ -210,7 +222,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
   const canGoNext = activeVideoIndex >= 0 && activeVideoIndex < feedVideos.length - 1;
 
   useEffect(() => {
-    if (activeVideoIndex < 0 || activeVideoIndex < feedVideos.length - 4) return;
+    if (feedVideos.length && activeVideoIndex < feedVideos.length - 4) return;
     if (hasNextPage && !isFetching && !feedIsError) void fetchNextPage();
   }, [activeVideoIndex, feedVideos.length, hasNextPage, isFetching, feedIsError, fetchNextPage]);
 
@@ -306,7 +318,7 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                   <VideoOptions
                     video={video}
                     audioSaved={savedByAudioId[video.audio?.id ?? video.audio_id ?? 0] ?? video.audio?.viewer.saved ?? false}
-                    onSaveChange={updateVideoSaveState}
+                    onToggleSave={() => toggleSave(video)}
                     onAudioSaveChange={updateAudioSaveState}
                     onCreatorBlocked={hideBlockedCreator}
                   />
@@ -343,14 +355,15 @@ export function FeedExperience({ initialVideoId }: { initialVideoId?: number }) 
                 </div>
 
                 <ActionRail
-                  key={`${video.id}-${video.viewer.following}-${video.viewer.saved}-${video.stats.saves}`}
                   video={video}
                   onComments={() => {
                     setActiveVideoId(video.id);
                     setCommentsOpen(true);
                   }}
-                  onFollowChange={updateCreatorFollowState}
-                  onSaveChange={updateVideoSaveState}
+                  onToggleLike={() => toggleLike(video)}
+                  onToggleSave={() => toggleSave(video)}
+                  onToggleFollow={() => toggleFollow(video)}
+                  onShare={channel => recordShare(video, channel)}
                 />
                 </div>
               </div>

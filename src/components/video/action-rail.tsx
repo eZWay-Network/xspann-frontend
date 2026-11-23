@@ -8,100 +8,38 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/components/common/auth-provider";
 import { useTheme } from "@/components/common/theme-provider";
 import { UserAvatar } from "@/components/common/user-avatar";
-import { followUser, unfollowUser } from "@/services/follows";
-import { likeVideo, unlikeVideo } from "@/services/likes";
-import { saveVideo, unsaveVideo } from "@/services/saves";
-import { shareVideo as shareVideoRequest } from "@/services/shares";
 import { compactNumber, cx } from "@/lib/format";
 import type { Video } from "@/types/api";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function ActionRail({
   video,
   onComments,
-  onFollowChange,
-  onSaveChange,
+  onToggleFollow,
+  onToggleLike,
+  onToggleSave,
+  onShare,
 }: {
   video: Video;
   onComments: () => void;
-  onFollowChange?: (userId: number, following: boolean) => void;
-  onSaveChange?: (videoId: number, saved: boolean, savesCount: number) => void;
+  onToggleFollow: () => Promise<void>;
+  onToggleLike: () => Promise<void>;
+  onToggleSave: () => Promise<void>;
+  onShare: (channel: string) => Promise<void>;
 }) {
   const { authenticated, token, user } = useAuth();
-  const queryClient = useQueryClient();
   const router = useRouter();
-  const [liked, setLiked] = useState(video.viewer.liked);
-  const [saved, setSaved] = useState(video.viewer.saved);
-  const [following, setFollowing] = useState(video.viewer.following);
-  const [likes, setLikes] = useState(video.stats.likes);
-  const [saves, setSaves] = useState(video.stats.saves);
-  const [shares, setShares] = useState(video.stats.shares);
+  const { following, liked, saved } = video.viewer;
+  const { likes, saves, shares } = video.stats;
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const isOwnVideo = user?.id === video.user.id;
 
-  async function toggleFollow() {
-    if (isOwnVideo) return;
-    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
-
-    const wasFollowing = following;
-    setFollowing(!wasFollowing);
-    onFollowChange?.(video.user.id, !wasFollowing);
-
-    try {
-      const response = wasFollowing ? await unfollowUser(video.user.id, token) : await followUser(video.user.id, token);
-      setFollowing(response.data.following);
-      onFollowChange?.(video.user.id, response.data.following);
-      void queryClient.invalidateQueries({ queryKey: ["feed"] });
-      void queryClient.invalidateQueries({ queryKey: ["profile"] });
-    } catch {
-      setFollowing(wasFollowing);
-      onFollowChange?.(video.user.id, wasFollowing);
+  function runSignedIn(action: () => Promise<void>) {
+    if (!authenticated || !token) {
+      router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`);
+      return;
     }
-  }
-
-  async function toggleLike() {
-    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
-
-    const wasLiked = liked;
-    setLiked((value) => !value);
-    setLikes((value) => Math.max(0, value + (wasLiked ? -1 : 1)));
-
-    try {
-      const response = wasLiked ? await unlikeVideo(video.id, token) : await likeVideo(video.id, token);
-      setLiked(response.data.liked);
-      setLikes(response.data.likes_count);
-      void queryClient.invalidateQueries({ queryKey: ["feed"] });
-      void queryClient.invalidateQueries({ queryKey: ["liked-videos"] });
-      void queryClient.invalidateQueries({ queryKey: ["my-videos"] });
-    } catch {
-      setLiked(wasLiked);
-      setLikes(video.stats.likes);
-    }
-  }
-
-  async function toggleSave() {
-    if (!authenticated || !token) { router.push(`/login?next=${encodeURIComponent(`/video/${video.id}`)}`); return; }
-
-    const wasSaved = saved;
-    const previousSaves = saves;
-    const optimisticSaves = Math.max(0, previousSaves + (wasSaved ? -1 : 1));
-    setSaved((value) => !value);
-    setSaves(optimisticSaves);
-    onSaveChange?.(video.id, !wasSaved, optimisticSaves);
-
-    try {
-      const response = wasSaved ? await unsaveVideo(video.id, token) : await saveVideo(video.id, token);
-      setSaved(response.data.saved);
-      setSaves(response.data.saves_count);
-      onSaveChange?.(video.id, response.data.saved, response.data.saves_count);
-      void queryClient.invalidateQueries({ queryKey: ["feed"] });
-      void queryClient.invalidateQueries({ queryKey: ["saved-videos"] });
-    } catch {
-      setSaved(wasSaved);
-      setSaves(previousSaves);
-      onSaveChange?.(video.id, wasSaved, previousSaves);
-    }
+    void action().catch(() => undefined); // The interaction restores its previous state on failure.
   }
 
   function getShareUrl() {
@@ -120,18 +58,6 @@ export function ActionRail({
     }
   }
 
-  async function recordShare(channel: string) {
-    setShares((value) => value + 1);
-
-    try {
-      const response = await shareVideoRequest(video.id, channel, token);
-      setShares(response.data.shares_count);
-      void queryClient.invalidateQueries({ queryKey: ["feed"] });
-    } catch {
-      setShares(video.stats.shares);
-    }
-  }
-
   async function handleShare(channel: string) {
     const shareUrl = getShareUrl();
     const shareText = video.caption ? `${video.caption} ${shareUrl}` : shareUrl;
@@ -139,7 +65,7 @@ export function ActionRail({
     if (channel === "copy_link") {
       const copied = await writeToClipboard(shareUrl);
       setShareMessage(copied ? "Link copied" : "Could not copy link");
-      if (copied) await recordShare(channel);
+      if (copied) await onShare(channel);
       return;
     }
 
@@ -147,44 +73,44 @@ export function ActionRail({
       const embedCode = `<iframe src="${shareUrl}" title="XPN social video" width="360" height="640" allowfullscreen></iframe>`;
       const copied = await writeToClipboard(embedCode);
       setShareMessage(copied ? "Embed code copied" : "Could not copy embed code");
-      if (copied) await recordShare(channel);
+      if (copied) await onShare(channel);
       return;
     }
 
     if (channel === "whatsapp") {
-      if (window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (channel === "facebook") {
-      if (window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (channel === "telegram") {
-      if (window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (channel === "x") {
-      if (window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (channel === "linkedin") {
-      if (window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (channel === "pinterest") {
-      if (window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await recordShare(channel);
+      if (window.open(`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(shareUrl)}&description=${encodeURIComponent(video.caption ?? "XPN social")}`, "_blank", "noopener,noreferrer")) await onShare(channel);
       return;
     }
 
     if (typeof navigator !== "undefined" && "share" in navigator) {
       try {
         await navigator.share({ title: "XPN social", text: video.caption ?? undefined, url: shareUrl });
-        await recordShare(channel);
+        await onShare(channel);
       } catch {
         // Dismissing the native share sheet is not a completed share.
       }
@@ -199,7 +125,7 @@ export function ActionRail({
         </Link>
         {!isOwnVideo && (
           <button
-            onClick={() => void toggleFollow()}
+            onClick={() => runSignedIn(onToggleFollow)}
             className={cx(
               "absolute -bottom-2 left-1/2 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full text-white transition",
               following ? "bg-[#7545e8] hover:bg-[#6635d5]" : "bg-[#7545e8] hover:bg-[#6635d5]",
@@ -212,9 +138,9 @@ export function ActionRail({
           </button>
         )}
       </div>
-      <ActionButton label={compactNumber(likes)} name={liked ? "Unlike video" : "Like video"} kind="like" active={liked} onClick={() => void toggleLike()} icon={<Heart size={25} strokeWidth={1.8} fill={liked ? "currentColor" : "none"} />} />
+      <ActionButton label={compactNumber(likes)} name={liked ? "Unlike video" : "Like video"} kind="like" active={liked} onClick={() => runSignedIn(onToggleLike)} icon={<Heart size={25} strokeWidth={1.8} fill={liked ? "currentColor" : "none"} />} />
       <ActionButton label={compactNumber(video.stats.comments)} name="Open comments" onClick={onComments} icon={<MessageCircle size={25} strokeWidth={1.8} />} />
-      <ActionButton label={compactNumber(saves)} name={saved ? "Unsave video" : "Save video"} active={saved} onClick={() => void toggleSave()} icon={<Bookmark size={25} strokeWidth={1.8} fill={saved ? "currentColor" : "none"} />} />
+      <ActionButton label={compactNumber(saves)} name={saved ? "Unsave video" : "Save video"} active={saved} onClick={() => runSignedIn(onToggleSave)} icon={<Bookmark size={25} strokeWidth={1.8} fill={saved ? "currentColor" : "none"} />} />
       <ActionButton label={compactNumber(shares)} name="Share video" onClick={() => setShareOpen(true)} icon={<TikTokShareIcon />} />
       {shareOpen && (
         <ShareSheet
@@ -225,7 +151,7 @@ export function ActionRail({
             setShareOpen(false);
             setShareMessage("");
           }}
-          onShare={(channel) => void handleShare(channel)}
+          onShare={(channel) => void handleShare(channel).catch(() => setShareMessage("Could not update the share count."))}
         />
       )}
     </div>

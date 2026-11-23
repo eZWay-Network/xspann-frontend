@@ -31,7 +31,6 @@ import {
 import { compactNumber, cx } from "@/lib/format";
 import { ApiError } from "@/services/api";
 import { saveAudio, unsaveAudio } from "@/services/audio";
-import { saveVideo, unsaveVideo } from "@/services/saves";
 import { blockUser, reportVideo } from "@/services/safety";
 import type { Video } from "@/types/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,12 +48,12 @@ const VIDEO_REPORT_REASONS = [
 type VideoOptionsProps = {
   video: Video;
   audioSaved: boolean;
-  onSaveChange: (videoId: number, saved: boolean, savesCount: number) => void;
+  onToggleSave: () => Promise<void>;
   onAudioSaveChange: (audioId: number, saved: boolean) => void;
   onCreatorBlocked: (userId: number) => void;
 };
 
-export function VideoOptions({ video, audioSaved, onSaveChange, onAudioSaveChange, onCreatorBlocked }: VideoOptionsProps) {
+export function VideoOptions({ video, audioSaved, onToggleSave, onAudioSaveChange, onCreatorBlocked }: VideoOptionsProps) {
   const { authenticated, token, user } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
@@ -128,20 +127,12 @@ export function VideoOptions({ video, audioSaved, onSaveChange, onAudioSaveChang
   async function toggleSave() {
     if (!requireAuthentication() || !token) return;
 
-    const wasSaved = video.viewer.saved;
-    const previousCount = video.stats.saves;
-    const optimisticCount = Math.max(0, previousCount + (wasSaved ? -1 : 1));
     setSubmitting("save");
     setError("");
-    onSaveChange(video.id, !wasSaved, optimisticCount);
-
     try {
-      const response = wasSaved ? await unsaveVideo(video.id, token) : await saveVideo(video.id, token);
-      onSaveChange(video.id, response.data.saved, response.data.saves_count);
+      await onToggleSave();
       setMenuOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ["saved-videos"] });
     } catch (caughtError) {
-      onSaveChange(video.id, wasSaved, previousCount);
       setError(caughtError instanceof ApiError ? caughtError.message : "Could not update this saved video.");
     } finally {
       setSubmitting(null);
@@ -203,7 +194,6 @@ export function VideoOptions({ video, audioSaved, onSaveChange, onAudioSaveChang
       setBlockOpen(false);
       onCreatorBlocked(video.user.id);
       void queryClient.invalidateQueries({ queryKey: ["blocked-users"] });
-      void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["comments"] });
       void queryClient.invalidateQueries({ queryKey: ["discover-videos"] });
     } catch (caughtError) {
