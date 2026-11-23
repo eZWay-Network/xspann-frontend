@@ -44,6 +44,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-dvh overflow-hidden bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+      {pathname !== "/feed" && (
+        <div className="fixed left-3 top-2 z-30 md:hidden">
+          <Logo />
+        </div>
+      )}
       <MobileMenu
         authenticated={authenticated}
         isDark={isDark}

@@ -214,7 +214,7 @@ export function PostsManager() {
   }
 
   return (
-    <section className={cx("h-screen overflow-y-auto pb-24 transition-colors duration-200", isDark ? "bg-transparent text-white" : "bg-white text-zinc-950")}>
+    <section className={cx("h-screen overflow-y-auto pb-24 pt-20 transition-colors duration-200 md:pt-0", isDark ? "bg-transparent text-white" : "bg-white text-zinc-950")}>
       <div className={cx("border-b px-4 py-4 sm:px-8", isDark ? "border-violet-200/10 bg-[#090313]/72" : "border-zinc-200 bg-white")}>
         <div className="min-h-10">
           <h1 className="text-xl font-black">Posts</h1>

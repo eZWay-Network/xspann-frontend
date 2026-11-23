@@ -651,7 +651,7 @@ export function UploadVideoForm() {
   }
 
   return (
-    <section className="h-screen overflow-y-auto bg-white px-4 pb-28 pt-5 text-zinc-950 md:pb-5 lg:px-8" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+    <section className="h-screen overflow-y-auto bg-white px-4 pb-28 pt-20 text-zinc-950 md:pb-5 md:pt-5 lg:px-8" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
       <form onSubmit={handleSubmit} className="mx-auto max-w-7xl">
         <div className={cx("mb-6 rounded-lg border bg-white p-4 shadow-sm", file ? "border-emerald-200 shadow-emerald-100" : "border-zinc-200")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
