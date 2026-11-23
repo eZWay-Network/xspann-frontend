@@ -192,10 +192,10 @@ export function CommentsPanel({
   if (!open) return null;
 
   return (
-    <aside className={cx("fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l p-4 pb-[calc(16px+env(safe-area-inset-bottom,0px))] backdrop-blur-2xl sm:w-[420px] sm:p-5", isDark ? "border-violet-200/10 bg-[#0b0614]/96 text-white" : "border-zinc-200 bg-white/96 text-zinc-950")}>
+    <aside className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[var(--line)] bg-background p-4 pb-[calc(16px+env(safe-area-inset-bottom,0px))] text-foreground sm:w-[420px] sm:p-5">
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <h2 className="text-lg font-bold">Comments <span className="font-medium text-[var(--muted)]">{video.stats.comments}</span></h2>
-        <button type="button" onClick={onClose} className={cx("grid h-8 w-8 place-items-center rounded-full transition", isDark ? "bg-white/10 text-violet-100/70 hover:bg-white/20" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200")} aria-label="Close comments"><X size={18} /></button>
+        <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-hover)] hover:text-foreground" aria-label="Close comments"><X size={18} /></button>
       </div>
 
       <div className="modern-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
@@ -216,7 +216,6 @@ export function CommentsPanel({
               <ReplyComposer
                 value={replyBody}
                 username={replyTarget.username}
-                isDark={isDark}
                 emojiOpen={replyEmojiOpen}
                 pending={createReplyMutation.isPending}
                 onChange={setReplyBody}
@@ -250,11 +249,11 @@ export function CommentsPanel({
 
       {(error || commentsQuery.isError) && <p role="alert" className={cx("mt-3 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm", isDark ? "text-rose-300" : "text-rose-600")}>{error || "Could not load comments."}</p>}
       {notice && <p role="status" className="mt-3 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">{notice}</p>}
-      {emojiOpen && <EmojiPicker isDark={isDark} onChoose={(emoji) => { setBody((current) => `${current}${emoji}`); setEmojiOpen(false); }} />}
+      {emojiOpen && <EmojiPicker onChoose={(emoji) => { setBody((current) => `${current}${emoji}`); setEmojiOpen(false); }} />}
       <form onSubmit={submitComment} className="mt-3 flex shrink-0 items-center gap-2">
         <UserAvatar src={user?.avatar} size={36} className="h-9 w-9" />
-        <div className={cx("flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full px-4", isDark ? "bg-white/10" : "bg-zinc-100")}>
-          <input value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} disabled={!authenticated || createCommentMutation.isPending} placeholder={authenticated ? "Add comment..." : "Log in to comment"} className={cx("min-w-0 flex-1 border-0 bg-transparent text-sm outline-none disabled:cursor-not-allowed", isDark ? "placeholder:text-violet-100/45" : "placeholder:text-zinc-400")} />
+        <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-[var(--surface)] px-4">
+          <input value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} disabled={!authenticated || createCommentMutation.isPending} placeholder={authenticated ? "Add comment..." : "Log in to comment"} className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-[var(--muted)] disabled:cursor-not-allowed" />
           <button type="button" disabled={!authenticated || createCommentMutation.isPending} onClick={() => setEmojiOpen((current) => !current)} className="grid h-8 w-8 shrink-0 place-items-center disabled:opacity-40" aria-label="Add emoji" aria-expanded={emojiOpen}><SmilePlus size={20} /></button>
         </div>
         <button type="submit" disabled={!authenticated || createCommentMutation.isPending || !body.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--royal)] text-white disabled:opacity-45" aria-label="Send comment">
@@ -394,10 +393,9 @@ function removeCommentPage(current: CommentPages | undefined, commentId: number)
   };
 }
 
-function ReplyComposer({ value, username, isDark, emojiOpen, pending, onChange, onEmojiToggle, onCancel, onSubmit }: {
+function ReplyComposer({ value, username, emojiOpen, pending, onChange, onEmojiToggle, onCancel, onSubmit }: {
   value: string;
   username: string;
-  isDark: boolean;
   emojiOpen: boolean;
   pending: boolean;
   onChange: (value: string) => void;
@@ -408,7 +406,7 @@ function ReplyComposer({ value, username, isDark, emojiOpen, pending, onChange, 
   return (
     <div className="ml-10 mt-2">
       <form onSubmit={onSubmit} className="flex items-center gap-2">
-        <div className={cx("flex h-10 min-w-0 flex-1 items-center gap-1 rounded-full border px-3", isDark ? "border-white/20 bg-white/5" : "border-zinc-300 bg-zinc-50")}>
+        <div className="flex h-10 min-w-0 flex-1 items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3">
           <input autoFocus value={value} onChange={(event) => onChange(event.target.value)} maxLength={1000} disabled={pending} placeholder="Add a reply..." className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" aria-label="Add a reply" />
           <button type="button" onClick={() => onChange(`${value}@${username} `)} disabled={pending} className="text-lg font-semibold disabled:opacity-50" aria-label={`Mention ${username}`}>@</button>
           <button type="button" onClick={onEmojiToggle} disabled={pending} className="disabled:opacity-50" aria-label="Add emoji to reply" aria-expanded={emojiOpen}><SmilePlus size={20} /></button>
@@ -418,14 +416,14 @@ function ReplyComposer({ value, username, isDark, emojiOpen, pending, onChange, 
         </button>
         <button type="button" onClick={onCancel} disabled={pending} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--muted)] hover:bg-[var(--surface)]" aria-label="Cancel reply"><X size={18} /></button>
       </form>
-      {emojiOpen && <EmojiPicker isDark={isDark} onChoose={(emoji) => { onChange(`${value}${emoji}`); onEmojiToggle(); }} />}
+      {emojiOpen && <EmojiPicker onChoose={(emoji) => { onChange(`${value}${emoji}`); onEmojiToggle(); }} />}
     </div>
   );
 }
 
-function EmojiPicker({ isDark, onChoose }: { isDark: boolean; onChoose: (emoji: string) => void }) {
+function EmojiPicker({ onChoose }: { onChoose: (emoji: string) => void }) {
   return (
-    <div className={cx("mt-2 rounded-lg border p-3 shadow-sm", isDark ? "border-white/10 bg-[#15101f]" : "border-zinc-200 bg-white")}>
+    <div className="mt-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-3 shadow-sm">
       <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-7 sm:gap-2">
         {commentEmojis.map((emoji, index) => (
           <button key={`${emoji}-${index}`} type="button" onClick={() => onChoose(emoji)} className="grid h-9 w-9 place-items-center rounded-md text-xl hover:bg-[var(--surface)]" aria-label={`Add ${emoji}`}>{emoji}</button>
