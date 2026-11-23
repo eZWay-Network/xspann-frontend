@@ -17,6 +17,7 @@ export function useThreadHistory(id: number, token: string) {
     sync: (structural?: boolean) => void;
     older: () => void;
     acknowledge: (message: ConversationMessage) => void;
+    applyChange: (id: number, replacement: ConversationMessage | null) => void;
   } | null>(null);
 
   useEffect(() => {
@@ -69,6 +70,12 @@ export function useThreadHistory(id: number, token: string) {
     actions.current = {
       sync,
       acknowledge(row) { if (!denied) { history.acknowledge(row); render(); sync(false); } },
+      applyChange(messageId, replacement) {
+        if (denied) return;
+        history.applyChange(messageId, replacement);
+        render();
+        sync();
+      },
       older() { older = true; void drain(); },
     };
     const onHint = (event: Event) => {

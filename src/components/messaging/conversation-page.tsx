@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { UserAvatar } from "@/components/common/user-avatar";
-import { recipientName } from "@/lib/messaging";
+import { MESSAGE_BODY_LIMIT, recipientName } from "@/lib/messaging";
+import { SentMessageActions } from "./sent-message-actions";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BellOff, Flag, LoaderCircle, RefreshCw, Send } from "lucide-react";
@@ -13,6 +14,7 @@ import { useThreadHistory } from "@/hooks/use-thread-history";
 import { queryKeys } from "@/lib/query-keys";
 import { ApiError } from "@/services/api";
 import { markConversationRead, sendMessage, updateConversationPreferences } from "@/services/messaging";
+import type { ConversationMessage } from "@/types/api";
 
 type PendingMessage = { body: string; clientMessageId: string };
 
@@ -40,6 +42,7 @@ function Thread({ id, token, owner }: { id: number; token: string; owner: number
   const [pendingMessage, setPendingMessage] = useState<PendingMessage | null>(null);
   const [reportingMessageId, setReportingMessageId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const bodyTooLong = Array.from(body.trim()).length > MESSAGE_BODY_LIMIT;
   const send = useMutation({
     mutationFn: (payload: PendingMessage) => sendMessage(id, payload.body, payload.clientMessageId, token!),
     onSuccess: (response) => {
@@ -52,6 +55,22 @@ function Thread({ id, token, owner }: { id: number; token: string; owner: number
       setError(caught instanceof ApiError ? caught.message : "Message delivery is uncertain. Retry uses the same message ID and exact text.");
     },
   });
+
+  // History can confirm delivery after a lost POST response. Retire that send UUID before offering any actions on it.
+  if (pendingMessage && !send.isPending && messages.some(message => message.sender_user_id === owner && message.client_message_id === pendingMessage.clientMessageId)) {
+    setPendingMessage(null);
+    setBody("");
+    setError("");
+  }
+
+  function messageChanged(messageId: number, replacement: ConversationMessage | null) {
+    actions.current?.applyChange(messageId, replacement);
+    void client.invalidateQueries({ queryKey: queryKeys.conversations(owner) });
+    if (!replacement) {
+      void client.invalidateQueries({ queryKey: queryKeys.summary(owner) });
+      void client.invalidateQueries({ queryKey: queryKeys.notifications(owner) });
+    }
+  }
 
   useEffect(() => {
     if (stickToBottom.current) bottomRef.current?.scrollIntoView({ block: "nearest" });
@@ -116,14 +135,14 @@ function Thread({ id, token, owner }: { id: number; token: string; owner: number
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (send.isPending) return;
+    if (send.isPending || !detail?.can_send || (!pendingMessage && bodyTooLong)) return;
     const payload = pendingMessage ?? (body.trim() ? { body: body.trim(), clientMessageId: crypto.randomUUID() } : null);
     if (!payload) return;
     if (!pendingMessage) setPendingMessage(payload);
     send.mutate(payload);
   }
 
-  return <section className="flex h-full flex-col pb-[var(--nav-height)] md:pb-0">
+  return <section className="flex h-full flex-col pt-16 pb-[var(--nav-height)] md:pb-0">
     <header className="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--line)] px-4 sm:px-6"><Link href="/inbox" className="icon-button" aria-label="Back to inbox"><ArrowLeft size={20} /></Link><UserAvatar src={detail?.recipient?.avatar} name={detail?.recipient?.name || detail?.recipient?.username} size={40} className="h-10 w-10" />
       <div className="min-w-0 flex-1">
         <h1 className="truncate font-semibold">{detail ? recipientName(detail.recipient) : "Conversation"}</h1>
@@ -131,8 +150,31 @@ function Thread({ id, token, owner }: { id: number; token: string; owner: number
           <span>{detail ? detail.can_send ? realtimeStatus === "ready" ? "Live messaging" : "Connecting…" : "Message history only" : "Loading…"}</span>
         </p>
       </div>{detail && <button onClick={() => void updateConversationPreferences(id, !detail.muted, token!).then((response) => { if (actions.current) setDetail(response.data); void client.invalidateQueries({ queryKey: queryKeys.conversations(owner) }); })} className="icon-button" title={detail.muted ? "Unmute conversation" : "Mute conversation"}><BellOff size={18} /></button>}</header>
-    <div ref={viewport} onScroll={e => { const el = e.currentTarget; stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }} className="modern-scrollbar flex-1 overflow-y-auto px-4 py-5 sm:px-8"><div className="mx-auto max-w-3xl space-y-3">{history.before !== null && <button type="button" onClick={() => actions.current?.older()} className="mx-auto block rounded-full border border-[var(--line)] px-4 py-2 text-xs font-semibold">Load older messages</button>}{history.loading && <p className="text-center text-sm text-[var(--muted)]">Loading messages…</p>}{history.error && <button type="button" onClick={() => actions.current?.sync()} className="mx-auto flex items-center gap-2 text-sm font-semibold text-pink-400"><RefreshCw size={15} /> Retry message history</button>}{messages.map((message) => { const mine = message.sender_user_id === owner; return <div key={message.id} className={`group flex items-center gap-2 ${mine ? "justify-end" : "justify-start"}`}><div data-incoming={mine || message.unavailable ? undefined : message.id} className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${mine ? "rounded-br-md bg-violet-600 text-white" : "rounded-bl-md bg-[var(--surface)]"}`}>{message.unavailable || message.body === null ? <em className="opacity-70">Message unavailable</em> : message.body}<p className={`mt-1 text-[10px] ${mine ? "text-violet-100/70" : "text-[var(--muted)]"}`}>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></div>{!mine && <button type="button" onClick={() => setReportingMessageId(message.id)} className="icon-button opacity-60 sm:opacity-0 sm:group-hover:opacity-100" aria-label="Report message"><Flag size={14} /></button>}</div>; })}{reportingMessageId && <ReportTargetForm target={{ message_id: reportingMessageId }} token={token!} onClose={() => setReportingMessageId(null)} />}<div ref={bottomRef} /></div></div>
+    <div ref={viewport} onScroll={e => { const el = e.currentTarget; stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }} className="modern-scrollbar flex-1 overflow-y-auto px-4 py-5 sm:px-8">
+      <div className="mx-auto max-w-3xl space-y-3">
+        {history.before !== null && <button type="button" onClick={() => actions.current?.older()} className="mx-auto block rounded-full border border-[var(--line)] px-4 py-2 text-xs font-semibold">Load older messages</button>}
+        {history.loading && <p className="text-center text-sm text-[var(--muted)]">Loading messages…</p>}
+        {history.error && <button type="button" onClick={() => actions.current?.sync()} className="mx-auto flex items-center gap-2 text-sm font-semibold text-pink-400"><RefreshCw size={15} /> Retry message history</button>}
+        {messages.map(message => {
+          const mine = message.sender_user_id === owner;
+          return <div key={message.id} className={`group flex items-center gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+            <div data-incoming={mine || message.unavailable ? undefined : message.id} className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${mine ? "rounded-br-md bg-violet-600 text-white" : "rounded-bl-md bg-[var(--surface)]"}`}>
+              {message.unavailable || message.body === null ? <em className="opacity-70">Message unavailable</em> : <p className="whitespace-pre-wrap break-words">{message.body}</p>}
+              <div className={`mt-1 flex flex-wrap items-center gap-x-2 text-xs ${mine ? "text-violet-100" : "text-[var(--muted)]"}`}>
+                <time dateTime={message.created_at} className="text-[10px]">{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                {mine && (!pendingMessage || message.client_message_id !== pendingMessage.clientMessageId) && <SentMessageActions
+                  message={message} canSend={Boolean(detail?.can_send)} token={token} onChange={messageChanged} onRefresh={() => actions.current?.sync()} />}
+              </div>
+            </div>
+            {!mine && <button type="button" onClick={() => setReportingMessageId(message.id)} className="icon-button opacity-60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Report message"><Flag size={14} /></button>}
+          </div>;
+        })}
+        {reportingMessageId && <ReportTargetForm target={{ message_id: reportingMessageId }} token={token} onClose={() => setReportingMessageId(null)} />}
+        <div ref={bottomRef} />
+      </div>
+    </div>
     {error && <div role="alert" className="shrink-0 bg-pink-500/10 px-5 py-2 text-center text-xs text-pink-300">{error}{pendingMessage && <button type="button" onClick={() => { setPendingMessage(null); setError(""); }} className="ml-3 font-bold underline">Discard failed send</button>}</div>}
-    <form onSubmit={submit} className="shrink-0 border-t border-[var(--line)] bg-[var(--background)] p-3 sm:p-4"><div className="mx-auto flex max-w-3xl items-end gap-2"><textarea value={pendingMessage?.body ?? body} onChange={(event) => setBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!detail?.can_send || Boolean(pendingMessage)} rows={1} maxLength={2000} placeholder={detail?.can_send ? "Write a message…" : "Messaging is unavailable for this conversation"} className="studio-input h-auto min-h-11 resize-none py-3" /><button disabled={!(pendingMessage?.body ?? body.trim()) || !detail?.can_send || send.isPending} className="grid h-11 min-w-11 shrink-0 place-items-center rounded-xl bg-violet-600 px-3 text-white disabled:opacity-50" aria-label={pendingMessage ? "Retry message" : "Send message"}>{send.isPending ? <LoaderCircle size={18} className="animate-spin" /> : pendingMessage ? <span className="text-xs font-bold">Retry</span> : <Send size={18} />}</button></div></form>
+    {!pendingMessage && bodyTooLong && <p role="alert" className="px-5 py-2 text-center text-xs">Use {MESSAGE_BODY_LIMIT.toLocaleString()} characters or fewer.</p>}
+    <form onSubmit={submit} className="shrink-0 border-t border-[var(--line)] bg-[var(--background)] p-3 sm:p-4"><div className="mx-auto flex max-w-3xl items-end gap-2"><textarea value={pendingMessage?.body ?? body} onChange={(event) => setBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!detail?.can_send || Boolean(pendingMessage)} rows={1} placeholder={detail?.can_send ? "Write a message…" : "Messaging is unavailable for this conversation"} className="studio-input h-auto min-h-11 resize-none py-3" /><button disabled={!(pendingMessage?.body ?? body.trim()) || !detail?.can_send || send.isPending || (!pendingMessage && bodyTooLong)} className="grid h-11 min-w-11 shrink-0 place-items-center rounded-xl bg-violet-600 px-3 text-white disabled:opacity-50" aria-label={pendingMessage ? "Retry message" : "Send message"}>{send.isPending ? <LoaderCircle size={18} className="animate-spin" /> : pendingMessage ? <span className="text-xs font-bold">Retry</span> : <Send size={18} />}</button></div></form>
   </section>;
 }

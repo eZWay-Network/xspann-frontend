@@ -6681,6 +6681,142 @@
       },
       {
         "group": "Artists",
+        "title": "Browse artist releases and playlists",
+        "description": "Returns two independently populated arrays for Home discovery. Guests can browse and an optional bearer token applies viewer visibility and blocks. Both collections use listed, visible artists. Releases include up to 12 public, approved, published and ready videos with media, newest publication first (creation time is the fallback). Playlists include up to 8 public, approved collections, newest creation first. Only eligible public videos contribute to inclusion, cover and count. Ties use descending ID. Either array can be empty. This endpoint has no pagination. Responses use Cache-Control: private, no-store.",
+        "response": {
+          "data": {
+            "releases": [
+              {
+                "artist_id": 1,
+                "artist_name": "Alex Band",
+                "video": {
+                  "moderation_status": "approved",
+                  "reuse_content": true,
+                  "id": 1,
+                  "audio_id": 1,
+                  "audio_mode": "replace",
+                  "audio_settings": null,
+                  "audio": {
+                    "reuse_allowed": true,
+                    "moderation_status": "approved",
+                    "viewer": {
+                      "saved": false
+                    },
+                    "id": 1,
+                    "title": "Original sound - Alex Morgan",
+                    "audio_url": "https://media.example.com/sounds/1/example.m4a",
+                    "duration": 12,
+                    "origin": "original",
+                    "status": "ready",
+                    "source_video_id": 1,
+                    "videos_count": 1,
+                    "creator": {
+                      "id": 1,
+                      "name": "Alex Morgan",
+                      "username": "alex",
+                      "avatar": null,
+                      "bio": null,
+                      "followers_count": 0,
+                      "following_count": 0,
+                      "following": false,
+                      "cover_url": null,
+                      "cover_video_url": null
+                    },
+                    "created_at": "2026-09-29T10:00:00.000000Z"
+                  },
+                  "video_url": "https://media.example.com/videos/1/example.mp4",
+                  "thumbnail_url": null,
+                  "caption": "Hello #world",
+                  "tags": [
+                    "#world"
+                  ],
+                  "duration": 12,
+                  "location_name": null,
+                  "visibility": "public",
+                  "high_quality_upload": false,
+                  "pinned_at": null,
+                  "edit": {
+                    "trim_start": null,
+                    "trim_end": null,
+                    "cut_points": [],
+                    "cover_time": null,
+                    "crop_mode": "fit",
+                    "text_overlay": null,
+                    "original_audio_muted": false,
+                    "filter_settings": null,
+                    "effect_settings": null
+                  },
+                  "status": "published",
+                  "processing_state": "ready",
+                  "publication_state": "published",
+                  "publication_intent": "immediate",
+                  "published_at": "2026-09-29T10:00:00.000000Z",
+                  "user": {
+                    "id": 1,
+                    "name": "Alex Morgan",
+                    "username": "alex",
+                    "avatar": null,
+                    "bio": null,
+                    "followers_count": 0,
+                    "following_count": 0,
+                    "following": false,
+                    "cover_url": null,
+                    "cover_video_url": null
+                  },
+                  "stats": {
+                    "views": 0,
+                    "likes": 0,
+                    "comments": 0,
+                    "saves": 0,
+                    "shares": 0
+                  },
+                  "viewer": {
+                    "liked": false,
+                    "saved": false,
+                    "following": false
+                  },
+                  "created_at": "2026-09-29T10:00:00.000000Z"
+                }
+              }
+            ],
+            "playlists": [
+              {
+                "artist_user_id": 1,
+                "artist_name": "Alex Band",
+                "playlist": {
+                  "id": 1,
+                  "artist_id": 1,
+                  "title": "Debut",
+                  "description": null,
+                  "genre_id": 1,
+                  "category": "release",
+                  "visibility": "public",
+                  "videos_count": 1,
+                  "cover_url": null,
+                  "created_at": "2026-10-31T12:00:00.000000Z",
+                  "updated_at": "2026-10-31T12:00:00.000000Z"
+                }
+              }
+            ]
+          }
+        },
+        "status": "200",
+        "example": [],
+        "limit": null,
+        "errors": [],
+        "method": "GET",
+        "uri": "/api/v1/artist-highlights",
+        "route": "/api/v1/artist-highlights",
+        "id": "artistcontroller-highlights",
+        "auth": false,
+        "access": "public",
+        "rate": null,
+        "parameters": [],
+        "headers": [],
+        "contentType": null
+      },
+      {
+        "group": "Artists",
         "title": "Browse artists",
         "description": "Active, verified, onboarded accounts only; blocks in either direction hide the artist. Public resources contain no email or age evidence. Organic listed artists. q searches stage name/slug, with literal SQL wildcards. Filter genre_id; sort=latest (default) or popular by existing follower totals, then creation time and ID descending. No paid ranking or featured-artist placement.",
         "response": {
@@ -7745,7 +7881,7 @@
         "errors": {
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/artists/featured",
@@ -7776,21 +7912,31 @@
       {
         "group": "Promotions and placements",
         "title": "Promotion rate card and readiness",
-        "description": "Bookings are disabled by default. Exposes fixed cents, duration, capacity, surface, advertising declaration version and remedy terms. Availability requires verified web integration and a current trusted observation. Pro credit never expires; no cash withdrawal, transfers or top-ups.",
+        "description": "Bookings open after the worker verifies Discover. Exposes fixed cents, duration, capacity, surface, advertising declaration version and remedy terms. Readiness requires at least one enabled platform with fresh evidence. Pro credit never expires; no cash withdrawal, transfers or top-ups.",
         "response": {
           "data": [
             {
-              "id": "boost-24h-usd-500-v1",
-              "surface": "web_promoted_videos",
+              "id": "discover-boost",
+              "surface": "discover_promoted_videos",
               "enabled": false,
-              "configured": false,
+              "configured": true,
+              "platforms": [
+                "web",
+                "android",
+                "ios"
+              ],
+              "enabled_platforms": [
+                "web",
+                "android",
+                "ios"
+              ],
               "price_cents": 500,
               "currency": "usd",
               "duration_seconds": 86400,
               "capacity": 5,
-              "rights_version": "advertising-2026-10-31",
+              "rights_version": "discover-advertising-2026-11-10",
               "disclosure": "Sponsored",
-              "terms": "A 24-hour rotation slot; no guaranteed audience. Unused time returns ceil(500 × undelivered_seconds / 86400) credit cents. Extensions require explicit owner consent."
+              "terms": "One 24-hour Sponsored rotation in Discover on web, Android and iOS. Each second counts once when at least one enabled platform can serve your eligible video. A partial outage can reduce reach. Time unavailable on every platform returns proportional unused credit, rounded up to the next cent. Views, clicks and reach are not guaranteed. Extensions require your consent. Credit has no expiry, top-ups, transfers or cash withdrawal."
             }
           ]
         },
@@ -7801,7 +7947,7 @@
         "errors": {
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/promotion-offers",
@@ -7816,13 +7962,13 @@
       },
       {
         "group": "Promotions and placements",
-        "title": "Promoted web videos",
-        "description": "Explicit integration surface only; organic/native feeds are unchanged. At most five active campaigns, equal minute rotation, Sponsored label and sponsor identity. Rechecks current content/account/artist/rights/billing/block eligibility and durable invalidations. No request counts as delivery. Cache-Control: no-store. Signed event tokens expire within five minutes and are bound to viewer, campaign version and environment.",
+        "title": "Sponsored Discover videos",
+        "description": "Specify the shared Discover surface and exactly one platform. At most five active campaigns, equal minute rotation, Sponsored label and sponsor identity. Rechecks current content/account/artist/rights/billing/block eligibility and durable invalidations. No request counts as delivery. Cache-Control: no-store. Signed event tokens expire within five minutes and are bound to platform, viewer, campaign version and environment.",
         "response": {
           "data": [
             {
               "boost_id": 1,
-              "surface": "web_promoted_videos",
+              "surface": "discover_promoted_videos",
               "disclosure": "Sponsored",
               "sponsor": {
                 "artist_id": 1,
@@ -7919,6 +8065,7 @@
                 "created_at": "2026-09-29T10:00:00.000000Z"
               },
               "expires_at": "2026-11-02T12:00:00Z",
+              "token_expires_at": "2026-11-02T12:00:00Z",
               "event_token": "<signed-token>"
             }
           ],
@@ -7934,7 +8081,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/promotions/placements",
@@ -7949,7 +8096,14 @@
             "in": "query",
             "type": "string",
             "required": true,
-            "description": "required · string · in:web_promoted_videos"
+            "description": "required · string · in:discover_promoted_videos"
+          },
+          {
+            "name": "platform",
+            "in": "query",
+            "type": "string",
+            "required": true,
+            "description": "required · string · in:web,android,ios"
           }
         ],
         "headers": [],
@@ -7978,7 +8132,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "POST",
         "uri": "/api/v1/promotions/events",
@@ -8036,7 +8190,7 @@
           "403": "Inactive/unverified account, or an owner-only operation denied.",
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/me/artist/boost-balance",
@@ -8080,7 +8234,7 @@
           "403": "Inactive/unverified account, or an owner-only operation denied.",
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/me/artist/boost-ledger",
@@ -8118,8 +8272,8 @@
               "id": 1,
               "artist_id": 1,
               "video_id": 1,
-              "offer_id": "boost-24h-usd-500-v1",
-              "surface": "web_promoted_videos",
+              "offer_id": "discover-boost",
+              "surface": "discover_promoted_videos",
               "status": "draft",
               "version": 1,
               "price_cents": 500,
@@ -8128,7 +8282,7 @@
               "starts_at": "2026-11-02T12:00:00Z",
               "ends_at": "2026-11-03T12:00:00Z",
               "activated_at": null,
-              "rights_version": "advertising-2026-10-31",
+              "rights_version": "discover-advertising-2026-11-10",
               "rights_confirmed_at": "2026-11-02T12:00:00Z",
               "staff_hold": false,
               "stop_reason": null,
@@ -8161,7 +8315,7 @@
           "403": "Inactive/unverified account, or an owner-only operation denied.",
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/me/artist/boosts",
@@ -8198,8 +8352,8 @@
             "id": 1,
             "artist_id": 1,
             "video_id": 1,
-            "offer_id": "boost-24h-usd-500-v1",
-            "surface": "web_promoted_videos",
+            "offer_id": "discover-boost",
+            "surface": "discover_promoted_videos",
             "status": "draft",
             "version": 1,
             "price_cents": 500,
@@ -8208,7 +8362,7 @@
             "starts_at": "2026-11-02T12:00:00Z",
             "ends_at": "2026-11-03T12:00:00Z",
             "activated_at": null,
-            "rights_version": "advertising-2026-10-31",
+            "rights_version": "discover-advertising-2026-11-10",
             "rights_confirmed_at": "2026-11-02T12:00:00Z",
             "staff_hold": false,
             "stop_reason": null,
@@ -8229,10 +8383,10 @@
         },
         "example": {
           "video_id": 1,
-          "offer_id": "boost-24h-usd-500-v1",
+          "offer_id": "discover-boost",
           "starts_at": "2026-11-02T12:00:00Z",
           "rights_confirmed": true,
-          "rights_version": "advertising-2026-10-31"
+          "rights_version": "discover-advertising-2026-11-10"
         },
         "status": "201",
         "cursor": false,
@@ -8243,7 +8397,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "POST",
         "uri": "/api/v1/me/artist/boosts",
@@ -8301,8 +8455,8 @@
             "id": 1,
             "artist_id": 1,
             "video_id": 1,
-            "offer_id": "boost-24h-usd-500-v1",
-            "surface": "web_promoted_videos",
+            "offer_id": "discover-boost",
+            "surface": "discover_promoted_videos",
             "status": "draft",
             "version": 1,
             "price_cents": 500,
@@ -8311,7 +8465,7 @@
             "starts_at": "2026-11-02T12:00:00Z",
             "ends_at": "2026-11-03T12:00:00Z",
             "activated_at": null,
-            "rights_version": "advertising-2026-10-31",
+            "rights_version": "discover-advertising-2026-11-10",
             "rights_confirmed_at": "2026-11-02T12:00:00Z",
             "staff_hold": false,
             "stop_reason": null,
@@ -8340,7 +8494,7 @@
           "404": "Resource not found or not visible to this viewer.",
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/me/artist/boosts/{boost}",
@@ -8370,8 +8524,8 @@
             "id": 1,
             "artist_id": 1,
             "video_id": 1,
-            "offer_id": "boost-24h-usd-500-v1",
-            "surface": "web_promoted_videos",
+            "offer_id": "discover-boost",
+            "surface": "discover_promoted_videos",
             "status": "draft",
             "version": 1,
             "price_cents": 500,
@@ -8380,7 +8534,7 @@
             "starts_at": "2026-11-02T12:00:00Z",
             "ends_at": "2026-11-03T12:00:00Z",
             "activated_at": null,
-            "rights_version": "advertising-2026-10-31",
+            "rights_version": "discover-advertising-2026-11-10",
             "rights_confirmed_at": "2026-11-02T12:00:00Z",
             "staff_hold": false,
             "stop_reason": null,
@@ -8402,10 +8556,10 @@
         "example": {
           "version": 1,
           "video_id": 1,
-          "offer_id": "boost-24h-usd-500-v1",
+          "offer_id": "discover-boost",
           "starts_at": "2026-11-02T12:00:00Z",
           "rights_confirmed": true,
-          "rights_version": "advertising-2026-10-31"
+          "rights_version": "discover-advertising-2026-11-10"
         },
         "status": "200",
         "cursor": false,
@@ -8417,7 +8571,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "PATCH",
         "uri": "/api/v1/me/artist/boosts/{boost}",
@@ -8505,7 +8659,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "POST",
         "uri": "/api/v1/me/artist/boosts/{boost}/submit",
@@ -8551,8 +8705,8 @@
             "id": 1,
             "artist_id": 1,
             "video_id": 1,
-            "offer_id": "boost-24h-usd-500-v1",
-            "surface": "web_promoted_videos",
+            "offer_id": "discover-boost",
+            "surface": "discover_promoted_videos",
             "status": "cancelled",
             "version": 1,
             "price_cents": 500,
@@ -8561,7 +8715,7 @@
             "starts_at": "2026-11-02T12:00:00Z",
             "ends_at": "2026-11-03T12:00:00Z",
             "activated_at": null,
-            "rights_version": "advertising-2026-10-31",
+            "rights_version": "discover-advertising-2026-11-10",
             "rights_confirmed_at": "2026-11-02T12:00:00Z",
             "staff_hold": false,
             "stop_reason": null,
@@ -8593,7 +8747,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "POST",
         "uri": "/api/v1/me/artist/boosts/{boost}/cancel",
@@ -8664,7 +8818,7 @@
           "403": "Inactive/unverified account, or an owner-only operation denied.",
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "GET",
         "uri": "/api/v1/me/artist/placements",
@@ -8734,7 +8888,7 @@
           "409": "Stale version, conflicting idempotency/evidence, insufficient credit or inventory, or invalid state transition.",
           "422": "Invalid input. Unknown write fields and loose booleans are rejected.",
           "429": "Too many requests. Back off before retrying.",
-          "503": "The actual web surface, fresh availability evidence or operator capacity is not configured."
+          "503": "Discover bookings are closed, capacity is unavailable or all enabled platforms lack fresh evidence."
         },
         "method": "POST",
         "uri": "/api/v1/me/artist/placements/{placement}/extension-consent",
@@ -10958,7 +11112,7 @@
       {
         "group": "Messaging and preferences",
         "title": "Send a text message",
-        "description": "Free, participant-only. Rechecks permission on every send. UTF-8 body up to 2000 characters and a client-generated UUID. Same sender/UUID/input returns 200; different input returns 409. New writes return 201. Maximum 30 new messages per rolling minute per sender across all conversations. No edits, unsend, attachments or client publishing.",
+        "description": "Free, participant-only. Rechecks permission on every send. UTF-8 body up to 2000 characters and a client-generated UUID. Same sender/UUID/original input returns the current message with 200; different input returns 409. New writes return 201. Maximum 30 new messages per rolling minute per sender across all conversations. No attachments or client publishing.",
         "response": {
           "data": {
             "id": 1,
@@ -11017,6 +11171,111 @@
         ],
         "headers": [],
         "contentType": "application/json"
+      },
+      {
+        "group": "Messaging and preferences",
+        "title": "Edit your text message",
+        "description": "Sender-only within the specified conversation; foreign or missing messages return 404. Requires current messaging permission. Messages are editable for 5 minutes from the original created_at; at or after that deadline, or when restricted, edits return 409. Editing does not extend the deadline. Replaces body only, using the same UTF-8 validation as sending. Preserves the original send UUID and retry input. Emits conversation.updated for both participants when changed; reload message history to see edits.",
+        "response": {
+          "data": {
+            "id": 1,
+            "conversation_id": 1,
+            "sender_user_id": 1,
+            "client_message_id": "9eb30d77-eab2-4fa4-9344-f6f9bfbd83eb",
+            "body": "Updated hello",
+            "unavailable": false,
+            "created_at": "2026-10-31T12:00:00Z"
+          }
+        },
+        "example": {
+          "body": "Updated hello"
+        },
+        "status": "200",
+        "limit": null,
+        "errors": {
+          "401": "Missing, expired, revoked or invalid bearer token.",
+          "403": "Inactive/unverified account, or an owner-only operation denied.",
+          "404": "Resource not found or not visible to this viewer.",
+          "409": "Stale version, immutable accepted content or idempotency conflict.",
+          "422": "Invalid input; writes reject unknown fields.",
+          "429": "Per-account send, conversation creation or paid-period quota exhausted."
+        },
+        "cursor": false,
+        "method": "PATCH",
+        "uri": "/api/v1/conversations/{conversation}/messages/{message}",
+        "route": "/api/v1/conversations/{conversation}/messages/{message}",
+        "id": "conversationcontroller-updatemessage",
+        "auth": true,
+        "access": "active_verified_adult",
+        "rate": null,
+        "parameters": [
+          {
+            "name": "conversation",
+            "in": "path",
+            "type": "integer",
+            "required": true,
+            "description": "Numeric conversation ID."
+          },
+          {
+            "name": "message",
+            "in": "path",
+            "type": "integer",
+            "required": true,
+            "description": "Numeric message ID."
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "type": "string",
+            "required": true,
+            "description": "required · string · max:2000"
+          }
+        ],
+        "headers": [],
+        "contentType": "application/json"
+      },
+      {
+        "group": "Messaging and preferences",
+        "title": "Delete your message",
+        "description": "Sender-only within the specified conversation; foreign or missing messages return 404. Permanently removes the message for both participants and its linked alerts. Available after unfollow/block. Stored report evidence is retained. Emits conversation.updated; reload message history to remove deleted messages. Deleted send UUIDs are no longer reserved, so do not replay the original send.",
+        "response": null,
+        "example": [],
+        "status": "204",
+        "limit": null,
+        "errors": {
+          "401": "Missing, expired, revoked or invalid bearer token.",
+          "403": "Inactive/unverified account, or an owner-only operation denied.",
+          "404": "Resource not found or not visible to this viewer.",
+          "409": "Stale version, immutable accepted content or idempotency conflict.",
+          "422": "Invalid input; writes reject unknown fields.",
+          "429": "Per-account send, conversation creation or paid-period quota exhausted."
+        },
+        "cursor": false,
+        "method": "DELETE",
+        "uri": "/api/v1/conversations/{conversation}/messages/{message}",
+        "route": "/api/v1/conversations/{conversation}/messages/{message}",
+        "id": "conversationcontroller-destroymessage",
+        "auth": true,
+        "access": "active_verified_adult",
+        "rate": null,
+        "parameters": [
+          {
+            "name": "conversation",
+            "in": "path",
+            "type": "integer",
+            "required": true,
+            "description": "Numeric conversation ID."
+          },
+          {
+            "name": "message",
+            "in": "path",
+            "type": "integer",
+            "required": true,
+            "description": "Numeric message ID."
+          }
+        ],
+        "headers": [],
+        "contentType": null
       },
       {
         "group": "Messaging and preferences",
@@ -11169,6 +11428,7 @@
             "subscribed": false,
             "consent_version": null,
             "current_consent_version": "artist-updates-2026-10-31",
+            "wording": "Receive updates from this artist",
             "revision": 0,
             "channel": "in_app",
             "artist_updates_enabled": true
@@ -11214,6 +11474,7 @@
             "subscribed": false,
             "consent_version": null,
             "current_consent_version": "artist-updates-2026-10-31",
+            "wording": "Receive updates from this artist",
             "revision": 0,
             "channel": "in_app",
             "artist_updates_enabled": true

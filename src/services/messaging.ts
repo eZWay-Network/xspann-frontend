@@ -12,6 +12,10 @@ export const getMessages = (id: number, token: string, direction: { beforeId?: n
   return apiRequest<MessagePage>(`/conversations/${id}/messages?${params}`, { token, signal });
 };
 export const sendMessage = (id: number, body: string, clientMessageId: string, token: string) => apiRequest<SingleResponse<ConversationMessage>>(`/conversations/${id}/messages`, { method: "POST", token, body: JSON.stringify({ body, client_message_id: clientMessageId }) });
+export const editMessage = (conversationId: number, messageId: number, body: string, token: string) =>
+  apiRequest<SingleResponse<ConversationMessage>>(`/conversations/${conversationId}/messages/${messageId}`, { method: "PATCH", token, body: JSON.stringify({ body }) });
+export const deleteMessage = (conversationId: number, messageId: number, token: string) =>
+  apiRequest<void>(`/conversations/${conversationId}/messages/${messageId}`, { method: "DELETE", token });
 export const markConversationRead = (id: number, lastReadMessageId: number, token: string) => apiRequest<SingleResponse<Conversation>>(`/conversations/${id}/read`, { method: "PATCH", token, body: JSON.stringify({ last_read_message_id: lastReadMessageId }) });
 export const updateConversationPreferences = (id: number, muted: boolean, token: string) => apiRequest<SingleResponse<Conversation>>(`/conversations/${id}/preferences`, { method: "PATCH", token, body: JSON.stringify({ muted }) });
 export const getCommunicationPreferences = (token: string) => apiRequest<SingleResponse<CommunicationPreferences>>("/me/communication-preferences", { token });

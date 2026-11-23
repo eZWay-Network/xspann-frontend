@@ -1,5 +1,11 @@
 import type { Conversation, ConversationMessage, MessagePage } from "@/types/api";
 
+export const MESSAGE_BODY_LIMIT = 2000;
+
+export function messageEditDeadline(message: ConversationMessage) {
+  return Date.parse(message.created_at) + 5 * 60_000;
+}
+
 export function recipientName(person: Conversation["recipient"]): string {
   return person?.name?.trim() || (person?.username ? `@${person.username}` : "Unavailable account");
 }
@@ -45,18 +51,29 @@ export class ThreadHistory {
   rows: ConversationMessage[] = [];
   before: number | null = null;
   private cursor: number | null = null;
+  private revision = 0;
+
+  // A read started before a confirmed edit or deletion can contain the old body.
+  applyChange(id: number, replacement: ConversationMessage | null) {
+    this.revision++;
+    this.rows = replacement
+      ? this.rows.map(row => row.id === id && !row.unavailable && row.body !== null ? replacement : row)
+      : this.rows.filter(row => row.id !== id);
+  }
 
   acknowledge(row: ConversationMessage) {
     if (row.id > (this.cursor ?? 0)) this.rows = mergeMessages(this.rows, [row]);
   }
 
   async sync(load: Load, structural: boolean) {
+    const revision = this.revision;
     if (structural || this.cursor === null) {
       const oldest = this.rows[0]?.id;
       const fresh: ConversationMessage[] = [];
       let before: number | null = null;
       do {
         const page: MessagePage = await load(before === null ? {} : { beforeId: before });
+        if (this.revision !== revision) return;
         fresh.push(...page.data);
         if (!page.meta.has_more) { before = null; break; }
         const next = page.meta.next_before_id;
@@ -71,6 +88,7 @@ export class ThreadHistory {
     for (;;) {
       const afterId: number = this.cursor;
       const page = await load({ afterId });
+      if (this.revision !== revision) return;
       const next = page.meta.next_after_id;
       if (next === null || next < afterId || (page.meta.has_more && next === afterId)) throw Error("Invalid message cursor");
       this.rows = mergeMessages(this.rows, page.data);

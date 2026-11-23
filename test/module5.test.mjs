@@ -84,6 +84,29 @@ test("an acknowledged send cannot skip a gap, and snapshots replace redacted or 
   await history.sync(async () => page([{ ...message(1010), body: null, unavailable: true }, message(1)]), true);
   history.acknowledge(message(1010));
   assert.deepEqual(history.rows.map(m => m.id), [1, 1010]);
+  history.applyChange(1010, { ...message(1010), body: "Late edit response" });
   assert.equal(history.rows[1].body, null);
   assert.equal(history.rows[1].unavailable, true);
+});
+
+test("a history request already in flight cannot undo a confirmed edit or deletion", async () => {
+  const history = new ThreadHistory();
+  const snapshot = {
+    data: [message(2), message(1)],
+    meta: { has_more: false, next_before_id: null, next_after_id: null },
+  };
+  await history.sync(async () => snapshot, true);
+  let finishRead;
+  const refreshing = history.sync(() => new Promise(resolve => { finishRead = resolve; }), true);
+  const edited = { ...message(1), body: "Corrected text" };
+  history.applyChange(1, edited);
+  history.applyChange(2, null);
+  finishRead(snapshot);
+  await refreshing;
+  assert.deepEqual(history.rows, [edited]);
+  await history.sync(async ({ afterId }) => {
+    assert.equal(afterId, 2);
+    return { data: [message(3)], meta: { ...snapshot.meta, next_after_id: 3 } };
+  }, false);
+  assert.deepEqual(history.rows, [edited, message(3)]);
 });

@@ -67,6 +67,7 @@ export function RealtimeBridge() {
       if (event === "message.created" || event === "conversation.updated") {
         domains.add("inbox"); domains.add("summary");
       }
+      if (event === "conversation.updated") domains.add("activity"); // Deleted messages also lose their linked alerts.
       if (event === "notification.created" || event === "notifications.updated") {
         domains.add("activity"); domains.add("summary"); domains.add("announcements");
       }
