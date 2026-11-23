@@ -108,8 +108,9 @@ function ReleaseCard({ release, token, thumbnailUrl, selected, onOpen }: { relea
 }
 
 function ReleaseThumbnail({ release, token, thumbnailUrl }: { release: Release; token: string; thumbnailUrl?: string | null }) {
-  const publicThumbnail = release.thumbnail_url ?? thumbnailUrl;
-  const previewPath = release.preview?.thumbnail;
+  const thumbnailCandidates = [release.thumbnail_url, thumbnailUrl].filter((value): value is string => Boolean(value));
+  const publicThumbnail = thumbnailCandidates.find((value) => !isOwnerPreviewThumbnail(value));
+  const previewPath = release.preview?.thumbnail ?? thumbnailCandidates.find(isOwnerPreviewThumbnail);
   const [previewResult, setPreviewResult] = useState<{ path: string; url?: string; failed?: boolean } | null>(null);
   const currentResult = previewResult?.path === previewPath ? previewResult : null;
   const privateUrl = currentResult?.url ?? "";
@@ -151,6 +152,15 @@ function ReleaseThumbnail({ release, token, thumbnailUrl }: { release: Release; 
   }
 
   return <span className="absolute inset-0 grid place-items-center overflow-hidden bg-[linear-gradient(145deg,#312e81,#18181b)] text-violet-100"><span className="absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/10" /><span className="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-violet-400/10" />{loading ? <LoaderCircle size={26} className="relative animate-spin" /> : <Music2 size={38} className="relative" />}</span>;
+}
+
+function isOwnerPreviewThumbnail(value: string) {
+  try {
+    const pathname = new URL(value, "https://xpn.invalid").pathname;
+    return /\/(?:api\/v1\/)?me\/videos\/\d+\/preview\/thumbnail\/?$/.test(pathname);
+  } catch {
+    return false;
+  }
 }
 
 function ReleaseMetric({ label, value, icon: Icon, tone = "neutral" }: { label: string; value: number; icon: React.ComponentType<{ size?: number; className?: string }>; tone?: "neutral" | "success" | "royal" }) {
@@ -211,14 +221,17 @@ function ReleaseEditor({ release, thumbnailUrl, token, userId, canSchedule, onCl
 }
 
 function PrivateReleasePreview({ release, thumbnailUrl, token, onRefresh }: { release: Release; thumbnailUrl?: string | null; token: string; onRefresh: () => void }) {
+  const thumbnailCandidates = [release.thumbnail_url, thumbnailUrl].filter((value): value is string => Boolean(value));
+  const publicThumbnail = thumbnailCandidates.find((value) => !isOwnerPreviewThumbnail(value));
+  const privateThumbnailPath = release.preview?.thumbnail ?? thumbnailCandidates.find(isOwnerPreviewThumbnail);
   const [urls, setUrls] = useState<{ video?: string; thumbnail?: string; audio?: string }>({});
-  const [loading, setLoading] = useState(() => Boolean(release.preview?.video || release.preview?.thumbnail || release.preview?.original_audio));
+  const [loading, setLoading] = useState(() => Boolean(release.preview?.video || privateThumbnailPath || release.preview?.original_audio));
   const [error, setError] = useState("");
   const refreshedFor = useRef("");
 
   useEffect(() => {
     const preview = release.preview;
-    if (!preview?.video && !preview?.thumbnail && !preview?.original_audio) return;
+    if (!preview?.video && !privateThumbnailPath && !preview?.original_audio) return;
     const controller = new AbortController();
     const created: string[] = [];
     let active = true;
@@ -229,9 +242,9 @@ function PrivateReleasePreview({ release, thumbnailUrl, token, onRefresh }: { re
       return [kind, url] as const;
     };
     void Promise.all([
-      preview.video ? load("video", preview.video) : null,
-      preview.thumbnail ? load("thumbnail", preview.thumbnail) : null,
-      preview.original_audio ? load("audio", preview.original_audio) : null,
+      preview?.video ? load("video", preview.video) : null,
+      privateThumbnailPath ? load("thumbnail", privateThumbnailPath) : null,
+      preview?.original_audio ? load("audio", preview.original_audio) : null,
     ]).then((entries) => {
       if (!active) return;
       const next: { video?: string; thumbnail?: string; audio?: string } = {};
@@ -240,13 +253,13 @@ function PrivateReleasePreview({ release, thumbnailUrl, token, onRefresh }: { re
     }).catch((caught) => {
       if (!active || controller.signal.aborted) return;
       setError(caught instanceof ApiError ? caught.message : "Private preview could not be loaded.");
-      const refreshKey = `${release.id}:${release.version}:${preview.video ?? ""}`;
+      const refreshKey = `${release.id}:${release.version}:${preview?.video ?? ""}`;
       if (caught instanceof ApiError && caught.status === 404 && refreshedFor.current !== refreshKey) { refreshedFor.current = refreshKey; onRefresh(); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); created.forEach((url) => URL.revokeObjectURL(url)); };
-  }, [onRefresh, release.id, release.preview, release.version, token]);
+  }, [onRefresh, privateThumbnailPath, release.id, release.preview, release.version, token]);
 
-  return <div><div className="relative aspect-video overflow-hidden rounded-xl bg-zinc-950">{urls.video ? <video controls playsInline preload="metadata" src={urls.video} poster={urls.thumbnail ?? thumbnailUrl ?? undefined} className="h-full w-full object-contain" /> : urls.thumbnail ? <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url("${urls.thumbnail}")` }} /> : thumbnailUrl ? <Image src={thumbnailUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 420px" className="object-cover" /> : <div className="grid h-full place-items-center text-center text-sm text-zinc-500"><span>{loading ? <><LoaderCircle size={24} className="mx-auto mb-2 animate-spin" />Loading owner preview…</> : release.processing_state === "processing" ? "Preview will be issued after processing." : "No private preview is currently available."}</span></div>}</div>{urls.audio && <audio controls preload="metadata" src={urls.audio} className="mt-3 w-full" />}{error && <p role="status" className={`mt-2 text-xs ${thumbnailUrl ? "text-[var(--muted)]" : "text-pink-400"}`}>{thumbnailUrl ? "Video preview is unavailable; showing the generated thumbnail." : error}</p>}<p className="mt-2 text-xs leading-5 text-[var(--muted)]">Private media is fetched with the owner session and held only in a temporary browser object URL.</p></div>;
+  return <div><div className="relative aspect-video overflow-hidden rounded-xl bg-zinc-950">{urls.video ? <video controls playsInline preload="metadata" src={urls.video} poster={urls.thumbnail ?? publicThumbnail} className="h-full w-full object-contain" /> : urls.thumbnail ? <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url("${urls.thumbnail}")` }} /> : publicThumbnail ? <Image src={publicThumbnail} alt="" fill sizes="(max-width: 1024px) 100vw, 420px" className="object-cover" /> : <div className="grid h-full place-items-center text-center text-sm text-zinc-500"><span>{loading ? <><LoaderCircle size={24} className="mx-auto mb-2 animate-spin" />Loading owner preview…</> : release.processing_state === "processing" ? "Preview will be issued after processing." : "No private preview is currently available."}</span></div>}</div>{urls.audio && <audio controls preload="metadata" src={urls.audio} className="mt-3 w-full" />}{error && <p role="status" className={`mt-2 text-xs ${publicThumbnail ? "text-[var(--muted)]" : "text-pink-400"}`}>{publicThumbnail ? "Video preview is unavailable; showing the generated thumbnail." : error}</p>}<p className="mt-2 text-xs leading-5 text-[var(--muted)]">Private media is fetched with the owner session and held only in a temporary browser object URL.</p></div>;
 }
 
 function SchedulePreview({ value, timeZone }: { value: string; timeZone: string }) {

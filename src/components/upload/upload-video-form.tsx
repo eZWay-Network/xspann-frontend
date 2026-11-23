@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, DragEvent, FormEvent, PointerEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -33,12 +33,15 @@ import {
 import { useAuth } from "@/components/common/auth-provider";
 import { XpnLoader } from "@/components/common/xpn-loader";
 import { ApiError } from "@/services/api";
+import { getEntitlements } from "@/services/billing";
 import { fallbackTracks, getSavedMusicTracks, searchMusicTracks, toMusicTrack } from "@/services/music";
+import { getRelease, scheduleRelease } from "@/services/releases";
 import { requestVideoUpload, uploadLocalAudio, uploadLocalVideo } from "@/services/uploads";
 import { createVideo, waitForOwnedVideoReady } from "@/services/videos";
 import { createAudio, getAudio, saveAudio, unsaveAudio, waitForAudioReady } from "@/services/audio";
 import { getPolicies } from "@/services/auth";
 import { cx } from "@/lib/format";
+import { formatReleaseInstant, scheduleInstantFromLocal } from "@/lib/releases";
 import type { MusicTrack } from "@/types/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -47,11 +50,14 @@ const maxAudioSize = 50 * 1024 * 1024;
 const supportedTypes = ["video/mp4", "video/quicktime", "video/webm"];
 const supportedAudioTypes = ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/aac", "audio/x-m4a", "audio/m4a", "audio/ogg", "audio/webm"];
 const customAudioTrackId = "custom-upload";
+const subscribeToBrowserTimeZone = () => () => undefined;
+const getBrowserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "processing-video" | "done";
-type CreatedVideoStatus = "processing" | "published" | "draft-ready" | "failed" | "uncertain";
+type Step = "idle" | "preparing" | "processing-audio" | "uploading" | "publishing" | "processing-video" | "scheduling" | "done";
+type CreatedVideoStatus = "processing" | "published" | "draft-ready" | "scheduled" | "failed" | "uncertain";
 type PreviewMode = "feed" | "profile" | "web";
 type Visibility = "public" | "followers" | "private";
+type PublicationMode = "immediate" | "draft" | "schedule";
 type CropMode = "fill" | "fit";
 type SoundLibraryTab = "explore" | "saved";
 type FilterSettings = {
@@ -88,6 +94,7 @@ export function UploadVideoForm() {
   const { authenticated, loading, token, user } = useAuth();
   const queryClient = useQueryClient();
   const policies = useQuery({ queryKey: ["policies"], queryFn: getPolicies, staleTime: 5 * 60_000 });
+  const entitlements = useQuery({ queryKey: ["entitlements", user?.id], enabled: Boolean(token && user), queryFn: () => getEntitlements(token!), refetchOnWindowFocus: true });
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
@@ -102,7 +109,13 @@ export function UploadVideoForm() {
   const [highQuality, setHighQuality] = useState(true);
   const [reuseContent, setReuseContent] = useState(false);
   const [rightsAccepted, setRightsAccepted] = useState(false);
-  const [publicationIntent] = useState<"immediate" | "draft">(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("intent") === "draft" ? "draft" : "immediate");
+  const [publicationMode, setPublicationMode] = useState<PublicationMode>(() => {
+    if (typeof window === "undefined") return "immediate";
+    const intent = new URLSearchParams(window.location.search).get("intent");
+    return intent === "schedule" ? "schedule" : intent === "draft" ? "draft" : "immediate";
+  });
+  const [scheduleLocal, setScheduleLocal] = useState("");
+  const timeZone = useSyncExternalStore(subscribeToBrowserTimeZone, getBrowserTimeZone, () => "UTC");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("feed");
   const [soundQuery, setSoundQuery] = useState("");
   const [soundResults, setSoundResults] = useState<MusicTrack[]>(fallbackTracks);
@@ -119,6 +132,7 @@ export function UploadVideoForm() {
   const [error, setError] = useState("");
   const [createdVideoId, setCreatedVideoId] = useState<number | null>(null);
   const [createdVideoStatus, setCreatedVideoStatus] = useState<CreatedVideoStatus | null>(null);
+  const [createdScheduleAt, setCreatedScheduleAt] = useState<string | null>(null);
   const [trimEditorOpen, setTrimEditorOpen] = useState(false);
   const [soundEditorOpen, setSoundEditorOpen] = useState(false);
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
@@ -153,6 +167,8 @@ export function UploadVideoForm() {
   }, [token]);
 
   const submitting = step !== "idle" && step !== "done";
+  const publicationIntent = publicationMode === "immediate" ? "immediate" : "draft";
+  const canSchedule = Boolean(entitlements.data?.data.capabilities.release_scheduling);
   const selectedSoundArtist = selectedSound.provider === "original" ? user?.username : selectedSound.artist;
   const externalSoundSelected = selectedSound.provider !== "original" && Boolean(selectedSound.preview_url);
   const selectedSoundUrl = externalSoundSelected ? selectedSound.preview_url : undefined;
@@ -423,6 +439,24 @@ export function UploadVideoForm() {
       return;
     }
 
+    let scheduledPublishAt = "";
+    if (publicationMode === "schedule") {
+      if (entitlements.isPending) {
+        setError("Checking your scheduling access. Please try again in a moment.");
+        return;
+      }
+      if (!canSchedule) {
+        setError("Release scheduling requires Artist Pro.");
+        return;
+      }
+      try {
+        scheduledPublishAt = scheduleInstantFromLocal(scheduleLocal, timeZone);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Choose a valid publication date and time.");
+        return;
+      }
+    }
+
     submittingRef.current = true;
     let createRequestStarted = false;
     try {
@@ -498,7 +532,32 @@ export function UploadVideoForm() {
 
       try {
         const readyVideo = await waitForOwnedVideoReady(video.data.id, publicationIntent, token);
-        setCreatedVideoStatus(readyVideo ? (publicationIntent === "draft" ? "draft-ready" : "published") : "processing");
+        if (!readyVideo) {
+          setCreatedVideoStatus("processing");
+        } else if (publicationMode === "schedule") {
+          setStep("scheduling");
+          try {
+            const release = await getRelease(video.data.id, token);
+            await scheduleRelease(video.data.id, {
+              version: release.data.version,
+              publish_at: scheduledPublishAt,
+              timezone: timeZone,
+            }, token);
+            setCreatedScheduleAt(scheduledPublishAt);
+            setCreatedVideoStatus("scheduled");
+          } catch (scheduleError) {
+            setCreatedVideoStatus("draft-ready");
+            if (scheduleError instanceof ApiError && scheduleError.status === 403) {
+              void queryClient.invalidateQueries({ queryKey: ["entitlements", user?.id] });
+            }
+            const message = scheduleError instanceof ApiError
+              ? Object.values(scheduleError.errors).flat()[0] ?? scheduleError.message
+              : scheduleError instanceof Error ? scheduleError.message : "The release could not be scheduled.";
+            setError(`Your private draft is ready, but scheduling failed: ${message}`);
+          }
+        } else {
+          setCreatedVideoStatus(publicationMode === "draft" ? "draft-ready" : "published");
+        }
       } catch (processingError) {
         setCreatedVideoStatus("failed");
         setError(processingError instanceof Error ? processingError.message : "Video processing failed.");
@@ -506,6 +565,7 @@ export function UploadVideoForm() {
 
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["my-videos"] });
+      void queryClient.invalidateQueries({ queryKey: ["releases"] });
       if (user?.username) {
         void queryClient.invalidateQueries({ queryKey: ["user-videos", user.username] });
       }
@@ -538,6 +598,7 @@ export function UploadVideoForm() {
     audioRef.current?.removeAttribute("src");
     setCreatedVideoId(null);
     setCreatedVideoStatus(null);
+    setCreatedScheduleAt(null);
     setError("");
     setDuration(0);
     setPreviewTime(0);
@@ -640,6 +701,27 @@ export function UploadVideoForm() {
                   <option value="private">Only me</option>
                 </select>
               </label>
+              <div className="mt-5">
+                <span className="mb-2 block text-sm font-semibold">When to publish</span>
+                <div className="grid grid-cols-3 gap-2" role="group" aria-label="Publication timing">
+                  {([
+                    { value: "immediate", label: "Post now" },
+                    { value: "draft", label: "Save draft" },
+                    { value: "schedule", label: "Schedule" },
+                  ] as Array<{ value: PublicationMode; label: string }>).map((option) => {
+                    const unavailable = option.value === "schedule" && (!canSchedule || entitlements.isPending);
+                    return <button key={option.value} type="button" disabled={unavailable} aria-pressed={publicationMode === option.value} onClick={() => { setError(""); setPublicationMode(option.value); }} className={cx("h-10 rounded-md border px-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-55", publicationMode === option.value ? "border-violet-500 bg-violet-50 text-violet-800" : "border-zinc-200 bg-zinc-100 text-zinc-600 hover:border-violet-300")}>{option.label}{option.value === "schedule" && !canSchedule && !entitlements.isPending ? " · Pro" : ""}</button>;
+                  })}
+                </div>
+                {publicationMode === "schedule" && canSchedule && (
+                  <label className="mt-3 block rounded-md border border-violet-200 bg-violet-50 p-3 text-sm font-semibold text-violet-950">
+                    <span className="mb-2 flex items-center gap-2"><Clock size={15} /> Publication date and time</span>
+                    <input type="datetime-local" required value={scheduleLocal} onChange={(event) => setScheduleLocal(event.target.value)} className="h-10 w-full rounded-md border border-violet-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-violet-300" />
+                    <span className="mt-2 block text-xs font-medium text-violet-700">Time zone: {timeZone}</span>
+                  </label>
+                )}
+                {publicationMode === "schedule" && !canSchedule && !entitlements.isPending && <p className="mt-2 text-xs text-zinc-500">Scheduling is available with Artist Pro. <Link href="/pricing" className="font-bold text-violet-700">View plans</Link></p>}
+              </div>
               <label className="mt-5 flex items-center justify-between rounded-md bg-zinc-100 px-3 py-3 text-sm font-semibold">
                 <span>High-quality uploads</span>
                 <input type="checkbox" checked={highQuality} onChange={(event) => setHighQuality(event.target.checked)} className="h-4 w-4 accent-violet-600" />
@@ -719,14 +801,15 @@ export function UploadVideoForm() {
 
             {createdVideoId && createdVideoStatus === "published" && <Status tone="success" text="Your video is published and ready to watch." />}
             {createdVideoId && createdVideoStatus === "draft-ready" && <Status tone="success" text="Your private draft is ready to review in Studio." />}
+            {createdVideoId && createdVideoStatus === "scheduled" && createdScheduleAt && <Status tone="success" text={`Your release is scheduled for ${formatReleaseInstant(createdScheduleAt, timeZone)}.`} />}
             {createdVideoId && createdVideoStatus === "processing" && <Status tone="success" text="Upload accepted. Your video is still processing—check My Posts for its current state before uploading it again." />}
             {createdVideoStatus === "uncertain" && <Status tone="error" text="Creation status is uncertain. Check Studio and My Posts before trying this upload again." />}
             {error && <Status tone="error" text={error} />}
             {submitting && <Progress step={step} />}
 
-            <button type="submit" disabled={submitting || !file || !rightsAccepted || step === "done"} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
+            <button type="submit" disabled={submitting || !file || !rightsAccepted || step === "done" || (publicationMode === "schedule" && (!canSchedule || !scheduleLocal))} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,var(--royal),var(--royal-bright))] text-sm font-black text-white shadow-[0_10px_30px_rgba(91,33,182,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65">
               {submitting && <LoaderCircle size={18} className="animate-spin" />}
-              {submitting ? stepLabel(step) : publicationIntent === "draft" ? "Save as draft" : "Publish"}
+              {submitting ? stepLabel(step) : publicationMode === "schedule" ? "Schedule post" : publicationMode === "draft" ? "Save as draft" : "Publish"}
             </button>
           </aside>
         </div>
@@ -1629,6 +1712,7 @@ function stepLabel(step: Step) {
   if (step === "uploading") return "Uploading video";
   if (step === "publishing") return "Publishing";
   if (step === "processing-video") return "Processing video";
+  if (step === "scheduling") return "Scheduling release";
   if (step === "done") return "Complete";
   return "Ready";
 }
@@ -1639,6 +1723,7 @@ function stepPercent(step: Step) {
   if (step === "uploading") return 64;
   if (step === "publishing") return 88;
   if (step === "processing-video") return 94;
+  if (step === "scheduling") return 98;
   if (step === "done") return 100;
   return 0;
 }
