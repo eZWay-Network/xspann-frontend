@@ -195,6 +195,7 @@ button:not(:disabled), [role="button"] { cursor: pointer; }
   font-size: 14px;
   outline: none;
 }
+.studio-input--with-icon { padding-left: 2.25rem; }
 .studio-input:focus { border-color: var(--royal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--royal) 22%, transparent); }
 .studio-input:disabled { cursor: not-allowed; opacity: .55; }
 .xpn-loader {

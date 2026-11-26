@@ -200,7 +200,7 @@ function ProfileEditor({ artist, token, userId, capabilities, onCreated }: { art
             <ProfileSectionHeading icon={Globe2} title="Discovery" description="Control how listeners find and feature you." />
             <div className="mt-5 space-y-4">
               <StudioField label="Location">
-                <div className="relative"><MapPin size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" /><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="City or region" className="studio-input pl-9" /></div>
+                <div className="relative"><MapPin size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" /><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="City or region" className="studio-input studio-input--with-icon" /></div>
               </StudioField>
               {artist && (capabilities.featured_release || draft.featured_video_id) && (
                 <StudioField label="Featured release">
