@@ -13,8 +13,7 @@ import { getPolicies, resendVerificationEmail } from "@/services/auth";
 import type { PolicyCatalog } from "@/types/api";
 import { cx } from "@/lib/format";
 import {
-  acceptedPolicyVersions,
-  allRequiredPoliciesAccepted,
+  requiredPolicyVersions,
   meetsMinimumAge,
   safeInternalPath,
 } from "@/lib/account-safety";
@@ -37,7 +36,6 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
     date_of_birth: "",
   });
   const [policies, setPolicies] = useState<PolicyCatalog | null>(null);
-  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [flow, setFlow] = useState<"credentials" | "onboarding" | "verification">("credentials");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
@@ -56,11 +54,6 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
     if (!isRegister && flow !== "onboarding") return;
     void getPolicies().then((response) => setPolicies(response.data)).catch(() => setMessage("Could not load the current policies. Please try again."));
   }, [flow, isRegister]);
-
-  const acceptedPolicies = useMemo(
-    () => acceptedPolicyVersions(policies?.policies ?? {}, accepted),
-    [accepted, policies],
-  );
 
   const redirectAfterSignIn = useCallback((forceWelcome = false) => {
     const nextPath = new URLSearchParams(window.location.search).get("next");
@@ -102,17 +95,16 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
 
     try {
       if (isRegister) {
-        const requiredAccepted = allRequiredPoliciesAccepted(policies?.policies ?? {}, accepted);
-        if (!policies || !meetsMinimumAge(values.date_of_birth, policies.minimum_age)) {
-          setErrors({ date_of_birth: [`You must be at least ${policies?.minimum_age ?? 18} years old.`] });
+        if (!policies) {
+          setMessage("Please wait for the current policies to load.");
+          return;
+        }
+        if (!meetsMinimumAge(values.date_of_birth, policies.minimum_age)) {
+          setErrors({ date_of_birth: [`You must be at least ${policies.minimum_age} years old.`] });
           setMessage("Enter a valid date of birth.");
           return;
         }
-        if (!policies || !requiredAccepted) {
-          setMessage("Please accept the current required policies.");
-          return;
-        }
-        const result = await auth.register({ ...values, accepted_policies: acceptedPolicies });
+        const result = await auth.register({ ...values, accepted_policies: requiredPolicyVersions(policies.policies) });
         rememberArtistSetupChoice();
         if (result === "verification_required") setFlow("verification");
         else if (result === "onboarding_required") setFlow("onboarding");
@@ -146,12 +138,11 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
     setSubmitting(true);
     setMessage("");
     try {
-      const requiredAccepted = allRequiredPoliciesAccepted(policies?.policies ?? {}, accepted);
-      if (!policies || !meetsMinimumAge(values.date_of_birth, policies.minimum_age)) {
-        throw new Error(`You must be at least ${policies?.minimum_age ?? 18} years old.`);
+      if (!policies) throw new Error("Please wait for the current policies to load.");
+      if (!meetsMinimumAge(values.date_of_birth, policies.minimum_age)) {
+        throw new Error(`You must be at least ${policies.minimum_age} years old.`);
       }
-      if (!policies || !requiredAccepted) throw new Error("Please accept the current required policies.");
-      await auth.completeOnboarding(values.date_of_birth, acceptedPolicies);
+      await auth.completeOnboarding(values.date_of_birth, requiredPolicyVersions(policies.policies));
       rememberArtistSetupChoice();
       redirectAfterSignIn(true);
     } catch (error) {
@@ -203,7 +194,7 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
               error={errors.date_of_birth?.[0]}
               isDark={isDark}
             />
-            <PolicyAcceptance policies={policies} accepted={accepted} setAccepted={setAccepted} />
+            <PolicyNotice policies={policies} />
             {message && <p className="rounded-md bg-pink-500/10 px-3 py-2 text-sm text-pink-300">{message}</p>}
             <button disabled={submitting || !policies} className="primary-button w-full">{submitting ? "Saving…" : "Complete setup"}</button>
           </form>
@@ -280,7 +271,7 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
                 }
                 required
               />
-              <PolicyAcceptance policies={policies} accepted={accepted} setAccepted={setAccepted} />
+              <PolicyNotice policies={policies} />
             </>
           )}
           {(message || firstError) && (
@@ -296,7 +287,7 @@ export function AuthCard({ mode, googleClientId }: { mode: "login" | "register";
             </p>
           )}
           <button
-            disabled={submitting}
+            disabled={submitting || (isRegister && !policies)}
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#7545e8] font-bold text-white  transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65"
           >
             {submitting && <LoaderCircle size={18} className="animate-spin" />}
@@ -440,21 +431,29 @@ function DateOfBirthPicker({ value, onChange, minimumAge, error, isDark }: {
   );
 }
 
-function PolicyAcceptance({ policies, accepted, setAccepted }: {
-  policies: PolicyCatalog | null;
-  accepted: Record<string, boolean>;
-  setAccepted: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-}) {
+function PolicyNotice({ policies }: { policies: PolicyCatalog | null }) {
+  if (!policies) {
+    return <p role="status" className="text-center text-xs text-[var(--muted)]">Loading current policies…</p>;
+  }
+
+  const agreementPolicies = Object.entries(policies.policies)
+    .filter(([name, policy]) => name !== "privacy" && (name === "terms" || policy.required));
+  const privacy = policies.policies.privacy;
+  const linkClass = "font-semibold text-[var(--foreground)] hover:underline";
+
   return (
-    <div className="space-y-2 rounded-lg border border-[var(--line)] p-3">
-      {!policies && <p className="text-xs text-[var(--muted)]">Loading current policies…</p>}
-      {Object.entries(policies?.policies ?? {}).map(([name, policy]) => (
-        <label key={name} className="flex items-start gap-2 text-xs leading-5">
-          <input type="checkbox" className="mt-1 accent-violet-600" checked={Boolean(accepted[name])} onChange={(event) => setAccepted((current) => ({ ...current, [name]: event.target.checked }))} />
-          <span>I accept the <a href={policy.url} target="_blank" rel="noreferrer" className="font-bold text-[var(--royal)]">{name.replaceAll("_", " ")}</a> policy ({policy.version}){policy.required ? " *" : ""}</span>
-        </label>
+    <p className="mx-auto max-w-sm px-2 py-2 text-center text-[11px] leading-4 text-[var(--muted)]">
+      By continuing, you agree to XPN Social’s{" "}
+      {agreementPolicies.map(([name, policy], index) => (
+        <span key={name}>
+          {index > 0 && (index === agreementPolicies.length - 1 ? " and " : ", ")}
+          <a href={policy.url} target="_blank" rel="noreferrer" className={linkClass}>
+            {name === "terms" ? "Terms of Service" : name === "community" ? "Community Guidelines" : `${name.replaceAll("_", " ")} policy`}
+          </a>
+        </span>
       ))}
-    </div>
+      {privacy && <>{" "}and confirm that you have read XPN Social’s{" "}<a href={privacy.url} target="_blank" rel="noreferrer" className={linkClass}>Privacy Policy</a></>}.
+    </p>
   );
 }
 

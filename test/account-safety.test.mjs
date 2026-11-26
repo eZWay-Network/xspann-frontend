@@ -6,6 +6,7 @@ import {
   exportNeedsPolling,
   isRecoveryPath,
   meetsMinimumAge,
+  requiredPolicyVersions,
   safeInternalPath,
 } from "../src/lib/account-safety.ts";
 
@@ -14,6 +15,17 @@ const policies = {
   privacy: { version: "2026-10-29", required: true },
   marketing: { version: "2026-10-29", required: false },
 };
+
+test("continuing accepts current required policies without opting into marketing", () => {
+  assert.deepEqual(
+    requiredPolicyVersions({
+      ...policies,
+      community: { version: "2026-11-01", required: true },
+    }),
+    { terms: "2026-10-29", privacy: "2026-10-29", community: "2026-11-01" },
+  );
+  assert.deepEqual(requiredPolicyVersions({}), {});
+});
 
 test("requires every mandatory policy and preserves optional consent", () => {
   assert.equal(allRequiredPoliciesAccepted(policies, { terms: true }), false);

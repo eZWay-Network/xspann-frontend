@@ -3,6 +3,14 @@ export type PolicyDescriptor = {
   required: boolean;
 };
 
+export function requiredPolicyVersions(policies: Record<string, PolicyDescriptor>) {
+  return Object.fromEntries(
+    Object.entries(policies)
+      .filter(([, policy]) => policy.required)
+      .map(([name, policy]) => [name, policy.version]),
+  );
+}
+
 export function acceptedPolicyVersions(
   policies: Record<string, PolicyDescriptor>,
   accepted: Record<string, boolean>,
